@@ -1,8 +1,11 @@
 # dissertation-ai-cost-extraction
-## By John Spencer
-## Student: 40739304
-## Napier University
-## MSC Data Engineering
+### By John Spencer
+### Student: 40739304
+### Napier University
+### MSC Data Engineering
+### Supervisor: Dimitra Gkatzia 
+### Internal Examiner: Saima Rafi
+### Module Leader: Dr Mouad Lemoudden
 Dissertation Project 2026 -  to see if AI can be used to extract and extrapolate dispersed supplier cost data from various different formats and incomplete data sets. Telecom products will be the used example.
 
 # Week 1 Summary (20260307) - Set up the backend and release management
