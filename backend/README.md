@@ -4,32 +4,6 @@
 ## Napier University
 ## MSC Data Engineering
 
-# Week 1 Summary (20260307) - Set up the backend and release management
-
-### Release Management
-- Git Hub created and set up for release management and traceability of project development
-### Database Setup
-- PostgreSQL installed locally
-- Database created: `cost_dissertation_db`
-- Table created: `cost_items`  This to test connection - not the final table schema.
-  Columns: `id`, `category`, `amount`, `year`
- ### Backend Setup 
-- FastAPI backend setup
-- Folder structure setup
-### API Endpoints Implemented
-- `GET /` – basic health check  
-- `GET /db-test` – verifies database connectivity  
-- `POST /add-cost` – inserts a cost item into the database
-
-###  End-to-End Test
-- Successfully inserted data via Swagger UI (`/docs`) http://127.0.0.1:8000/docs#/default/db_test_db_test_get
-- Verified data stored in PostgreSQL using SQL Shell
-
-## How to Run using initial local PC development
-1. Start PostgreSQL locally  
-2. Navigate to the backend folder  
-3. Run the API:
-
 
 
 
