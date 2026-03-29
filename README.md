@@ -67,3 +67,46 @@ This ingestion layer forms the foundation for Week 3 , where text extraction, OC
 ###  End-to-End Test
 - Successfully inserted data via Swagger UI (`/docs`) http://127.0.0.1:8000/docs#/default/db_test_db_test_get
 - Verified data stored in PostgreSQL using SQL Shell that data table containing file details was updated and set to pending status
+
+
+# Week 3 (v20260330) - Data Extraction Pipeline
+
+This week focused on implementing the full document‑extraction layer, enabling the system to process real supplier files across multiple formats. This forms the core technical capability required for later cost‑normalisation, pattern detection, and AI‑driven extrapolation.
+
+### Key Outcomes
+- Implemented a unified extraction engine for PDF, DOCX, Excel, and CSV
+- Added OCR support using Tesseract for scanned or image‑based PDFs
+- Extracted text, tables, and embedded images from Word documents
+- Converted extracted images to base64 for JSON‑safe database storage
+- Integrated all extractors into a single FastAPI endpoint
+- Stored extracted content in PostgreSQL for traceability and downstream processing
+- Ensured the architecture remains modular, reproducible, and extensible
+
+### Supported Extraction Features
+- PDF: text, tables, images, OCR
+- DOCX: text, tables, embedded images
+- Excel: sheets, tables, cell values
+- CSV: row‑based parsing
+
+### Database Table
+The extracted_content table now stores:
+- file ID
+- raw extracted text
+- extracted tables
+- base64‑encoded images for JSON
+- extraction status
+- timestamp
+
+### FastAPI Endpoint
+- POST /extract-file/{file_id}  
+- Automatically detects the file type and routes it to the appropriate extractor (PDF, DOCX, Excel, CSV).
+- Stores the extracted content in PostgreSQL as structured JSON.
+
+### Purpose
+This extraction layer completes the ingestion + processing foundation required for the dissertation.
+It enables the next phase: cost‑pattern extraction, normalisation, and AI‑driven inference across inconsistent supplier documents.
+
+### End‑to‑End Test
+- Successfully uploaded and extracted multiple file types via Swagger UI (/docs)
+- Verified extracted text, tables, and images stored correctly in PostgreSQL
+- Confirmed OCR works for scanned PDFs and DOCX image extraction serializes correctly
