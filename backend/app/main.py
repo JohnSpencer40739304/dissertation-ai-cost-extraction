@@ -1,8 +1,9 @@
 # Week 1 - Imports
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from modules.db import get_connection   # week 1 database connection test 20260307
+# from modules.db import get_connection   # week 1 database connection test 20260307 Line Disactivated in Week 3
 from pydantic import BaseModel  # week 1 insert data into DB using fastAPI from python
+
 
 #Week 2 - Imports + some code defining directory and file types
 from fastapi import UploadFile, File
@@ -25,6 +26,7 @@ class CostItem(BaseModel):
 
 app = FastAPI()
 
+
 # CORS configuration which allows for a smoother API backend in fastAPI
 
 origins = [
@@ -45,72 +47,44 @@ def root():
     return {"message": "TEST from the dissertation backend to check that the API works"}
 
 
-@app.get("/db-test")
-def db_test():
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT 1;")
-    result = cur.fetchone()
-    cur.close()
-    conn.close()
-    return {"db_response": result}
-
-# week 1 test to add data very python using fastAPI
-@app.post("/add-cost")
-def add_cost(item: CostItem):
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO cost_items (category, amount, year) VALUES (%s, %s, %s) RETURNING id;",
-        (item.category, item.amount, item.year)
-    )
-    new_id = cur.fetchone()[0]
-    conn.commit()
-    cur.close()
-    conn.close()
-    return {"inserted_id": new_id}
-
-# Week 2 - main body code
-
+# Week 2 - load file
 @app.post("/upload-file")
 async def upload_file(file: UploadFile = File(...)):
-    # check that the filename extension is valid and is either csv, excel, word etc 
-    _, ext = os.path.splitext(file.filename)
-    ext = ext.lower()
+    ext = os.path.splitext(file.filename)[1].lower()
 
     if ext not in ALLOWED_EXTENSIONS:
-        return {"error": f"Unsupported file type: {ext}"}
+        raise HTTPException(status_code=400, detail="Unsupported file type")
 
-    # Create unique filename with a date time stamp - this will allow user to reload the same file IF they modify manually
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    stored_name = f"{timestamp}_{file.filename}"
-    storage_path = os.path.join(UPLOAD_DIR, stored_name)
+    file_path = os.path.join(UPLOAD_DIR, file.filename)
 
-    with open(storage_path, "wb") as f:
+    with open(file_path, "wb") as f:
         f.write(await file.read())
 
-    # Insert all the metadata into DB - this is quite complex
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        INSERT INTO uploaded_files (filename, file_type, storage_path)
-        VALUES (%s, %s, %s)
-        RETURNING id;
-        """,
-        (file.filename, ext, storage_path)
+    # Store metadata in DB
+    from modules.db import UploadedFile, get_db
+    from sqlalchemy.orm import Session
+
+    db: Session = next(get_db())
+
+    uploaded = UploadedFile(
+        filename=file.filename,
+        storage_path=file_path,
+        file_type=ext,
+        uploaded_at=datetime.utcnow()
     )
-    new_id = cur.fetchone()[0]
-    conn.commit()
-    cur.close()
-    conn.close()
+
+    db.add(uploaded)
+    db.commit()
+    db.refresh(uploaded)
 
     return {
-        "uploaded_id": new_id,
-        "original_filename": file.filename,
-        "stored_as": stored_name,
-        "file_type": ext,
-        "status": "stored"
+        "status": "success",
+        "file_id": uploaded.id,
+        "filename": uploaded.filename
     }
 
+
+# Week 3 data extraction scripts
+from app.extract import router as extract_router
+app.include_router(extract_router)
 
