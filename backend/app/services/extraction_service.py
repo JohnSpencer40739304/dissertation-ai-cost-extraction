@@ -22,24 +22,45 @@
 import pandas as pd
 import fitz  # PyMuPDF
 import pytesseract
+import os # row added for metadata week 4
+import time # row added for metadata week 4
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-
-
 
 
 # EXCEL EXTRACTION (original code above and unchanged)
 
 def extract_excel(path: str):
+    start = time.time() # row added for metadata week 4
     xls = pd.ExcelFile(path)
     sheets_output = []
+    rows_per_sheet = {}  # week 4 row added for metadata 
+    columns_per_sheet = {}  # week 4 row added for metadata
     for sheet_name in xls.sheet_names:
         df = pd.read_excel(path, sheet_name=sheet_name, header=None)
         df = df.fillna("").astype(str)
+        rows_per_sheet[sheet_name] = df.shape[0]  # week 4 row added for metadata
+        columns_per_sheet[sheet_name] = df.shape[1]  # week 4 row added for metadata
         sheets_output.append({
             "sheet_name": sheet_name,
             "rows": df.values.tolist()
         })
-    return sheets_output
+    
+    # week 5 metadata section
+    metadata = {
+        "sheet_count": len(xls.sheet_names),
+        "rows_per_sheet": rows_per_sheet,
+        "columns_per_sheet": columns_per_sheet,
+        "file_size_kb": os.path.getsize(path) / 1024,
+        "extraction_time_ms": int((time.time() - start) * 1000)
+    }
+
+    #return sheets_output
+    # Week 4 modif
+    return {
+        "tables": sheets_output,
+        "metadata": metadata
+    }
+
 
 
 # ---------------------------------------------------------
@@ -111,15 +132,47 @@ def process_pdf_page(page, page_num):
 
 
 def extract_pdf(path: str):
+    start = time.time() # Week 4 modif for metadata
     doc = fitz.open(path)
     pages_output = []
 
+    # Week 4 modif
+    total_tables = 0
+    total_images = 0
+    ocr_used = False
+
     for page_num, page in enumerate(doc):
-        pages_output.append(process_pdf_page(page, page_num))
+        #pages_output.append(process_pdf_page(page, page_num))
 
-    return pages_output
+        # Weeek 4 modifications for Metadata
+        page_result = process_pdf_page(page, page_num)
+        pages_output.append(page_result)
+        # wook 4 - Count tables extracted from OCR
+        total_tables += len(page_result.get("image_tables", []))
+        # week 4 - Count images processed for meta
+        images = extract_images_from_page(page) # week 4  correction due to error during testing
+        total_images += len(images)
+        # week 4  - If any OCR text was used note it down
+        if len(images) > 0:
+            ocr_used = True
 
-# ---------------------------------------------------------
+    metadata = {
+        "page_count": len(doc),
+        "table_count": total_tables,
+        "image_count": total_images,
+        "ocr_used": ocr_used,
+        "file_size_kb": os.path.getsize(path) / 1024,
+        "extraction_time_ms": int((time.time() - start) * 1000)
+    }
+
+    return {
+        "pages": pages_output,
+        "metadata": metadata
+    }
+    #return pages_output
+
+
+# --------------------------------------------------------------
 # WORD SECTION 
 
 # Text and paragraphs section
@@ -168,15 +221,28 @@ def extract_docx_images(file_path):
 
 # merge all word part results
 def extract_docx(file_path):
+    start = time.time() # added week 4 for meta data
     doc = Document(file_path)
 
     text = extract_docx_text(doc)
     tables = extract_docx_tables(doc)
     images = extract_docx_images(file_path)
 
+    # Week 4 - Building  metadata
+    metadata = {
+        "paragraph_count": len(doc.paragraphs),
+        "table_count": len(doc.tables),
+        "image_count": len(images),
+        "file_size_kb": os.path.getsize(file_path) / 1024,
+        "extraction_time_ms": int((time.time() - start) * 1000)
+    }
+
+
     return {
         "text": text,
         "tables": tables,
-        "images": images
+        "images": images,
+        "metadata": metadata # week 4 meta data additional row
     }
+
 

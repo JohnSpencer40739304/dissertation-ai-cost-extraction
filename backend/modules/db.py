@@ -82,12 +82,13 @@ class ExtractedContent(Base):
     file_id = Column(Integer, ForeignKey("uploaded_files.id"))
     raw_text = Column(Text, nullable=True)
     raw_tables = Column(JSON, nullable=True)
+    raw_images = Column(JSON)          # week 4 - base64 images from DOCX
+    extraction_metadata = Column(JSON)            # week 4 - structural metadata
     extraction_status = Column(String, default="success")
     created_at = Column(DateTime, default=datetime.utcnow)
 
 # create the resulting tables
 def init_db():
     Base.metadata.create_all(bind=engine)
-
 
 
