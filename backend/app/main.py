@@ -6,10 +6,15 @@ from pydantic import BaseModel  # week 1 insert data into DB using fastAPI from 
 
 
 #Week 2 - Imports + some code defining directory and file types
-from fastapi import UploadFile, File
+from fastapi import UploadFile, File, HTTPException
 import os
 # from datetime import  # correction required here for API
 from datetime import datetime
+
+#Week 5 additions (2 lines below)
+#from backend.app.services.extraction_service import ExtractionService # used if Class existed in file but we have direct functions there
+from backend.app.services.extraction_service import extract_tables
+from backend.app.services.normalisation_service import NormalisationService
 
 
 UPLOAD_DIR = "uploads"
@@ -41,6 +46,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Week 5 additions (2 lines below) 
+#extraction_service = ExtractionService()
+normalisation_service = NormalisationService()
+
 # Week 1 database test endpoint from 20260307
 @app.get("/")
 def root():
@@ -61,7 +70,8 @@ async def upload_file(file: UploadFile = File(...)):
         f.write(await file.read())
 
     # Store metadata in DB
-    from modules.db import UploadedFile, get_db
+    # from modules.db import UploadedFile, get_db #week 5 correction
+    from backend.modules.db import UploadedFile, get_db
     from sqlalchemy.orm import Session
 
     db: Session = next(get_db())
@@ -85,6 +95,50 @@ async def upload_file(file: UploadFile = File(...)):
 
 
 # Week 3 data extraction scripts
-from app.extract import router as extract_router
+#from app.extract import router as extract_router
+# week 5 line correction to the above
+from backend.app.extract import router as extract_router
+
+
 app.include_router(extract_router)
+
+
+# Week 5 - run normalisation layer
+@app.get("/normalise/{file_id}")
+async def normalise_file(file_id: int):
+    # Step 1 — Extract raw table
+    #extraction_service = ExtractionService() # extraction not a class object but a function
+    #table = extraction_service.extract_tables(file_id) 
+    table = extract_tables(file_id)
+
+
+
+
+    if table is None:
+        raise HTTPException(status_code=404, detail="File not found or extraction failed")
+
+    # Step 2 — Run classic + AI normalisation
+    normalisation_service = NormalisationService()
+    result = normalisation_service.normalise(table)
+    # generates dataframes
+    #classic_json = result["classic_clean_df"].to_dict(orient="records")
+    #ai_json = result["ai_enriched_df"].to_dict(orient="records")
+    # corrections to above
+    classic_df = result["classic_clean_df"]
+    ai_df = result["ai_enriched_df"]
+   
+    # save to the database
+    normalisation_service.save_to_db(file_id, classic_df, ai_df)
+
+    return {
+        "file_id": file_id,
+        # "classic_clean": classic_json,   # dataframe only
+        # "ai_enriched": ai_json           # dataframe only - lines modified to store in DB
+        "classic_clean": classic_df.to_dict(orient="records"),
+        "ai_enriched": ai_df.to_dict(orient="records")
+    }
+
+
+
+
 

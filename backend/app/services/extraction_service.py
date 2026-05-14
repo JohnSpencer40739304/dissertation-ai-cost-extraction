@@ -29,6 +29,9 @@ pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tessera
 
 # EXCEL EXTRACTION (original code above and unchanged)
 
+#week 5 conversion of everything to a class
+
+
 def extract_excel(path: str):
     start = time.time() # row added for metadata week 4
     xls = pd.ExcelFile(path)
@@ -246,3 +249,15 @@ def extract_docx(file_path):
     }
 
 
+# Week 5 - add return extracted file file for normalisation step
+from backend.modules.db import get_db, ExtractedContent
+
+def extract_tables(file_id: int):
+    
+    db = next(get_db())
+    record = db.query(ExtractedContent).filter(ExtractedContent.file_id == file_id).first()
+
+    if not record:
+        return None
+
+    return record.raw_tables

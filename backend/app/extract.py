@@ -2,15 +2,20 @@
 # For routing excel data through the APIs
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
-from modules.db import get_db, UploadedFile, ExtractedContent
+# from modules.db import get_db, UploadedFile, ExtractedContent
+# Week 5 correction
+from backend.modules.db import get_db, UploadedFile, ExtractedContent
+
 # from app.services.extraction_service import extract_excel
 #from app.services.extraction_service import extract_excel, extract_pdf # above line with PDFs added
 # Add word to the list
-from app.services.extraction_service import (
+# from app.services.extraction_service import (  # Week 5 correction below
+from backend.app.services.extraction_service import (
     extract_pdf,
     extract_excel,
     extract_docx   
 )
+
 
 from datetime import datetime
 
@@ -96,6 +101,18 @@ def extract_file(file_id: int, db: Session = Depends(get_db)):
 
     #raise HTTPException(status_code=400, detail="Unsupported file type") # moved above
 
+
+# Week 5 - added to determine the table that needs to be picked up by the normalising step. It fetches the extracted table for the next step.
+from backend.modules.db import get_db, ExtractedContent
+
+def extract_tables(file_id: int):
+    db = next(get_db())
+    record = db.query(ExtractedContent).filter(ExtractedContent.file_id == file_id).first()
+
+    if not record:
+        return None
+
+    return record.raw_tables
 
 
 
