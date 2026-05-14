@@ -8,6 +8,46 @@
 ### Module Leader: Dr Mouad Lemoudden
 Dissertation Project 2026 -  to see if AI can be used to extract and extrapolate dispersed supplier cost data from various different formats and incomplete data sets. Telecom products will be the used example.
 
+# Week 5 (v20260505) - Normalisation Layer Using Classic Pipeline 
+
+Week 5 seeks to normalise data prior to using AI data extraction and processing.
+This version is NOT a full back version as it FAILs to work (see below).
+
+This version intentionally preserves the classic approach to illustrate its weaknesses:
+- Pandas cannot handle ragged or nested rows
+- PDF tables vary wildly in structure
+- Word tables may contain merged cells or inconsistent rows
+- OCR output is unpredictable
+- Row‑by‑row AI calls are costly
+- Metadata is not fully propagated
+- Normalisation fails on real‑world messy data
+
+These limitations form the academic justification for the next architectural phase.
+
+## Classic Normalisation (Baseline)
+A deterministic cleaning layer attempts to:
+
+remove empty rows
+remove empty columns
+clean text cells
+detect column types
+convert dates
+
+This approach works for clean Excel files but fails on:
+ragged OCR tables
+nested lists
+inconsistent row lengths
+mixed text + table content
+
+## AI using a dataframe (Baseline)
+This works when data is easily derterministic and Pandas can generate a dataframe to swallowed by OpenAI API.
+Our files are not. And while they reflect some real world messyness, they are still relatively tidy or lighter versions of that.
+The determenistic route was inching closer to a very biased solution to clean my test files. Meaning it overfits and will have to be rewritten whenever there is a new file.
+
+This limitation motivates the upcoming AI row processing batching rewrite in Week 6.
+
+
+
 # Week 4 (v20260406) - Modifications to the data extraction pipeline to include Metadata 
 
 Week 4 introduces a unified metadata extraction layer across all supported document formats (PDF, DOCX, XLSX).
