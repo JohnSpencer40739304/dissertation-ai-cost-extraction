@@ -15,7 +15,7 @@ from datetime import datetime
 #from backend.app.services.extraction_service import ExtractionService # used if Class existed in file but we have direct functions there
 from backend.app.services.extraction_service import extract_tables
 from backend.app.services.normalisation_service import NormalisationService
-
+from backend.modules.db import init_db
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -30,7 +30,7 @@ class CostItem(BaseModel):
     year: int
 
 app = FastAPI()
-
+init_db()
 
 # CORS configuration which allows for a smoother API backend in fastAPI
 
@@ -104,15 +104,13 @@ app.include_router(extract_router)
 
 
 # Week 5 - run normalisation layer
+"""
 @app.get("/normalise/{file_id}")
 async def normalise_file(file_id: int):
     # Step 1 — Extract raw table
     #extraction_service = ExtractionService() # extraction not a class object but a function
     #table = extraction_service.extract_tables(file_id) 
     table = extract_tables(file_id)
-
-
-
 
     if table is None:
         raise HTTPException(status_code=404, detail="File not found or extraction failed")
@@ -137,8 +135,41 @@ async def normalise_file(file_id: int):
         "classic_clean": classic_df.to_dict(orient="records"),
         "ai_enriched": ai_df.to_dict(orient="records")
     }
+"""
+
+# Corrected for change away from DF to batch data
+@app.get("/normalise/{file_id}")
+async def normalise_file(file_id: int):
+
+    # Step 1 — Extract raw table
+    table = extract_tables(file_id)
+
+    if table is None:
+        raise HTTPException(status_code=404, detail="File not found or extraction failed")
+
+    # Step 2 — Run classic + AI normalisation
+    normalisation_service = NormalisationService()
+    #result = normalisation_service.normalise(table, file_metadata={"file_id": file_id})
+    file_metadata = {
+        "file_id": file_id,
+        "source_format": table[0].get("source_format")
+    }
+
+    result = normalisation_service.normalise(table, file_metadata)
 
 
+
+    classic_rows = result["classic_clean"]
+    ai_rows = result["ai_enriched"]
+
+    # Step 3 — Save AI rows to DB
+    normalisation_service.save_to_db(file_id, ai_rows)
+
+    return {
+        "file_id": file_id,
+        "classic_clean": classic_rows,
+        "ai_enriched": ai_rows
+    }
 
 
 

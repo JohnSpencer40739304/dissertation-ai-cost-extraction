@@ -8,6 +8,29 @@
 ### Module Leader: Dr Mouad Lemoudden
 Dissertation Project 2026 -  to see if AI can be used to extract and extrapolate dispersed supplier cost data from various different formats and incomplete data sets. Telecom products will be the used example.
 
+# Week 6 (v20260515) - AI powered Cost Extraction and Normalisation
+
+After OCRs failed to extract tabled data from images, the extraction step was modified to include AI for those tricky to find tables.
+Week 6 main goal was the AI normaliser.
+
+It now combines deterministic parsing, OCR, and generative AI to extract and normalise messy, unstructured pricing tables into clean, structured data.
+- Extraction pipeline stable
+- AI fallback extraction working
+- Classic normaliser upgraded
+- AI normaliser running end‑to‑end
+- JSON decoding fixed
+- Prompt template fixed
+- Batch size logic fixed
+- Data stored correctly in PostgreSQL
+- SQL inspection validated
+
+This is the first fully functional version of the system.
+
+To start API : uvicorn backend.app.main:app --reload
+
+License : Internal academic + research use (dissertation project).
+
+
 # Week 5 (v20260505) - Normalisation Layer Using Classic Pipeline 
 
 Week 5 seeks to normalise data prior to using AI data extraction and processing.

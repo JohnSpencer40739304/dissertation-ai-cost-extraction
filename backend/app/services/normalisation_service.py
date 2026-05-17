@@ -1,11 +1,12 @@
 
 
-import pandas as pd
-import numpy as np
-import re
+#import pandas as pd
+#import numpy as np
+#import re
 import json
 from typing import List, Dict, Any
 from backend.app.tools.date_parser import looks_like_date, normalise_date # later added as dates are a complex subject
+
 
 # Open AI nomrmaliser moved to below to within a function so it is not called before it is needed and to avoid fast API Startup issues
 # from openai import OpenAI
@@ -18,129 +19,88 @@ from backend.modules.db import SessionLocal
 
 #-------------------------------------------------------------------------------------
 # Classic normalisation
-# Using pandas and numpy to do relatively simple cleaning tasks such as removing empty rows determining column type etc.
-# Based on extracted data but creates another table to allow for comparison
+# New light simple version - classic normalisation fails with adhoc files. Generative AI will be used instead.
+# this will return a list of rows for AI instead of a dataframe
+
+
+"""
 class ClassicNormaliser:
+    def __init__(self, extracted_tables):
+        self.extracted_tables = extracted_tables
 
-    # def __init__(self, table: List[Dict[str, Any]]): # correction for array padding to ensure all rows have the same number of units
-    # table = data extracted from PDF/DOCX/Excel
-    #   self.df = pd.DataFrame(table)
+    def run(self):
+        rows = []
 
-    # correction to above - find and then pad the rest to the longest row
-    # further corrections to remove empty lines
-    #def __init__(self, table: List[List[Any]]):
-    def __init__(self, table: List[Any]):
-        cleaned = []
-        for row in table:
-            if row is None:
-                cleaned.append([])
-            elif isinstance(row, list):
-                cleaned.append(row)
-            elif isinstance(row, str):
-                cleaned.append([row])
+        for item in self.extracted_tables:
+            if isinstance(item, dict) and "row" in item:
+                cells = [str(c) for c in item["row"] if c not in ("", None)]
+                if cells:
+                    rows.append({
+                        "cells": cells,
+                        "page": item.get("page"),
+                        "sheet": item.get("sheet"),
+                        "source_format": item.get("source_format")
+                    })
+        return rows
+"""
+
+#The rewrite of the extractor section  to include OpenAI to read tables that were not tables create 2 types of structure outputs. So it now needs to adapt.
+class ClassicNormaliser:
+   
+    def __init__(self, extracted_tables):
+        self.tables = extracted_tables
+
+    def run(self):
+        normalised_rows = []
+
+        for table in self.tables:
+
+
+            # CASE 1 — AI fallback table
+            if isinstance(table, dict) and "headers" in table and "rows" in table:
+                headers = [str(h).strip() for h in table["headers"]]
+
+                for row in table["rows"]:
+                    if not row:
+                        continue
+
+                    cells = [str(c).strip() if c is not None else "" for c in row]
+                    row_dict = dict(zip(headers, cells))
+
+                    normalised_rows.append({
+                        "cells": cells,
+                        "attributes": row_dict,
+                        "page": table.get("page"),
+                        "sheet": table.get("sheet"),
+                        "source_format": table.get("source_format", "ai_fallback")
+                    })
+
+            # CASE 2 — Deterministic extractors 
+            elif isinstance(table, dict) and "row" in table:
+                cells = [str(c).strip() for c in table["row"] if c not in ("", None)]
+
+                if cells:
+                    normalised_rows.append({
+                        "cells": cells,
+                        "attributes": {},
+                        "page": table.get("page"),
+                        "sheet": table.get("sheet"),
+                        "source_format": table.get("source_format")
+                    })
+
+            # CASE 3 — Unexpected format (fail-safe) interpreting as a simple list
             else:
-                cleaned.append([str(row)])
-        if not cleaned:
-            cleaned = [[]]
+                if isinstance(table, list):
+                    cells = [str(c).strip() for c in table]
+                    normalised_rows.append({
+                        "cells": cells,
+                        "attributes": {},
+                        "page": None,
+                        "sheet": None,
+                        "source_format": "unknown"
+                    })
 
-
-        max_len = max(len(row) for row in table)
-        padded = [
-            row + [None] * (max_len - len(row))
-            for row in table
-        ]
-        self.df = pd.DataFrame(padded)
-
-       
-
-    def run(self) -> pd.DataFrame:
-        
-        # Executes full normalisation cleaning via python
-        self._remove_empty_rows()
-        self._remove_empty_columns()
-        self._clean_text_cells()
-        self._convert_dates()   # moving dates to a seperate parsing tool
-        self._detect_column_types()
-        return self.df
-
-    def _remove_empty_rows(self):
-        self.df.replace("", np.nan, inplace=True)
-        self.df.dropna(how="all", inplace=True)
-
-    def _remove_empty_columns(self):
-        self.df.dropna(axis=1, how="all", inplace=True)
-
-    def _clean_text_cells(self):
-        for col in self.df.columns:
-            self.df[col] = self.df[col].apply(self._clean_cell)
-
-    def _clean_cell(self, value):
-        if pd.isna(value):
-            return None
-        text = str(value)
-        text = text.replace("\n", " ").strip()
-        text = re.sub(r"\s+", " ", text)
-        return text
-
-    def _detect_column_types(self):
-        # Creates a dictionary mapping each column to:
-        # numeric, date, currency, text, mixed
-        self.column_types = {}
-
-        """ date format checker moved to a seperate date parsing checker
-        date_patterns = [
-            r"^\d{4}-\d{2}-\d{2}$",                     # 2026-05-10
-            r"^\d{2}/\d{2}/\d{4}$",                     # 10/05/2026
-            r"^\d{2}-\d{2}-\d{4}$",                     # 10-05-2026
-            r"^\d{2}/\d{2}/\d{2}$",                     # 10/05/26
-            r"^\d{1,2} [A-Za-z]{3,9} \d{4}$",           # 10 May 2026
-            r"^[A-Za-z]{3,9} \d{1,2}, \d{4}$",          # May 10, 2026
-            r"^\d{8}$",                                 # 20260515 Legacy system style dates
-        ]
-        """
-        def _convert_dates(self):
-            for col, col_type in self.column_types.items():
-                if col_type == "date":
-                    self.df[col] = self.df[col].apply(normalise_date)
-        
-        def looks_like_date(value: str) -> bool:
-            for pattern in date_patterns:
-                if re.match(pattern, value):
-                    return True
-            return False
-    
-        for col in self.df.columns:
-            series = self.df[col]
-            numeric_count = 0
-            currency_count = 0
-            date_count = 0
-            total = len(series)
-
-            for val in series:
-                if val is None:
-                    continue
-                s = str(val).strip()
-                # Numeric detection tests
-                if re.match(r"^[€$£]?\s*\d+([.,]\d+)?$", s):
-                    numeric_count += 1
-                # for currency
-                if re.match(r"^[€$£]", s):
-                    currency_count += 1
-                # Date detection tests
-                if looks_like_date(s):
-                    date_count += 1
-
-            #determine what type of  column it was
-            if date_count / max(total, 1) > 0.6:
-                self.column_types[col] = "date"
-            elif numeric_count / max(total, 1) > 0.7:
-                self.column_types[col] = "numeric"
-            elif currency_count / max(total, 1) > 0.5:
-                self.column_types[col] = "currency"
-            else:
-                self.column_types[col] = "text"
-
-
+        return normalised_rows
 
 
 # --------------------------------------------------------------------------------
@@ -149,152 +109,112 @@ class ClassicNormaliser:
 # Based on normalised table above but creates another table to allow for comparison
 
 
+from backend.app.tools.adaptive_batch_size import get_adaptive_batch_size
+from backend.app.tools.batch_overlap import create_overlapping_batches
+from backend.app.services.memory_store import MemoryStore
+from backend.app.tools.prompt_templates import BATCH_PROMPT_TEMPLATE
+from openai import OpenAI
+
 class AINormaliser:
+    def __init__(self, rows, file_metadata, memory_store):
+        self.rows = rows
+        self.file_metadata = file_metadata
+        self.memory = memory_store
+        self.client = OpenAI()
 
-    def __init__(self, df: pd.DataFrame):
-        self.df = df.copy()
+    def run(self, file_id):
+        total = len(self.rows)
+        batch_size = get_adaptive_batch_size(total)
+        batch_size = max(1, batch_size or 1)
+        batches = create_overlapping_batches(self.rows, batch_size)
 
-    def run(self) -> pd.DataFrame:
-        enriched_rows = []
 
-        for _, row in self.df.iterrows():
-            ai_attrs = self._extract_ai_attributes(row)
-            enriched_rows.append({
-                **row.to_dict(),
-                "ai_attributes": ai_attrs
-            })
 
-        return pd.DataFrame(enriched_rows)
+        enriched = []
 
-    def _extract_ai_attributes(self, row: pd.Series) -> dict:
-        # Sends each row to OpenAI and extracts structured attributes.
-        from openai import OpenAI
-        client = OpenAI()  
+        for idx, batch in enumerate(batches):
+            prev_summary = self.memory.get_previous_summary(file_id, idx)
+            result, summary = self._process_batch(batch, prev_summary)
+            enriched.extend(result)
+            self.memory.save_summary(file_id, idx, summary)
 
-        prompt = f"""
-        These inputs are generally for telecom, networking, IT infrastructure and commercial proposals.
-        But could be for other cost files using a different structure such as material (steel, wood etc) and measures (2 metres high, 5mm deep..)
+        return enriched
 
-        Please extract structured attributes from this row of a network/telecom cost table.
-        The row may contain product descriptions, service names, bandwidth, SLAs,
-        hardware models, software licences, installation fees, recurring charges, etc.
+    def _process_batch(self, batch, prev_summary):
 
-        Please Return ONLY valid JSON with keys such as:
-        - product_type
-        - category
-        - material
-        - bandwidth
-        - capacity
-        - model
-        - vendor
-        - service_type
-        - recurring_cost
-        - one_time_cost
-        - unit_of_measure
-        - inferred_quantity
-        - inferred_unit_price
-        - inferred_total_price
 
-        If a field is not present, omit it.
-        If there are other attributes, please name appropriately.
+        prompt = BATCH_PROMPT_TEMPLATE.format(
+            user_instruction="We have recieved a messy costing file. Please normalise and extarct extract structured cost attributes.",
+            source_format=self.file_metadata.get("source_format"),
+            page_numbers=list({r.get("page") for r in batch}),
+            sheet_names=list({r.get("sheet") for r in batch}),
+            previous_summary=prev_summary or "None",
+            batch_rows=batch
+        )
+        
+       
+        # first prompt attempt
+        #prompt = f"""
+        #User instruction: Extract structured cost attributes.
+        #File type: {self.file_metadata.get('source_format')}
+        #Previous batch summary:
+        #{prev_summary or "None"}
+        #Current batch rows:
+        #{batch}
+        #Return JSON:
+        #{{
+        #    "rows": [...],
+        #    "summary": {{...}}
+        #}}
+        #"""
+        
 
-        Row: {row.to_dict()}
-        """
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"}
+        )
 
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"}
-            )
+        content = json.loads(response.choices[0].message.content)
+        return content["rows"], content["summary"]
 
-            return json.loads(response.choices[0].message.content)
-
-        except Exception as e:
-            print("AI extraction error:", e)
-            return {}
 
 
 # -----------------------------------------------------------------------
 # merges 2 above into a single call
 
-"""
-# produced only resulting dataframes
-class NormalisationService:
-
-    def __init__(self):
-        pass
-
-    def normalise(self, table: List[Dict[str, Any]]) -> Dict[str, pd.DataFrame]:
-        
-        # Runs both classic and AI normalisation layers.
-        #Returns two DataFrames:
-        # 1 - classic_clean_df
-        #2- ai_enriched_df
-        
-        # 1 - Python normalisation
-        classic = ClassicNormaliser(table)
-        classic_clean_df = classic.run()
-
-        # 2 - AI enrichment
-        ai = AINormaliser(classic_clean_df)
-        ai_enriched_df = ai.run()
-
-        return {
-            "classic_clean_df": classic_clean_df,
-            "ai_enriched_df": ai_enriched_df
-        }
-"""
 
 # above modified to store data
 class NormalisationService:
 
-    def normalise(self, table: List[Dict[str, Any]]) -> Dict[str, pd.DataFrame]:
-        
-        # 1 — Classic Python normalisation
+    def normalise(self, table, file_metadata):
+        # 1 — Classic normalisation
         classic = ClassicNormaliser(table)
-        classic_clean_df = classic.run()
+        rows = classic.run()
 
         # 2 — AI enrichment
-        ai = AINormaliser(classic_clean_df)
-        ai_enriched_df = ai.run()
+        memory = MemoryStore(db_session_factory=SessionLocal)
+        ai = AINormaliser(rows, file_metadata, memory)
+        ai_rows = ai.run(file_metadata["file_id"])
 
         return {
-            "classic_clean_df": classic_clean_df,
-            "ai_enriched_df": ai_enriched_df
+            "classic_clean": rows,
+            "ai_enriched": ai_rows
         }
 
-
-
-    def save_to_db(self, file_id: int, df, ai_df):
+    def save_to_db(self, file_id: int, ai_rows):
         db = SessionLocal()
 
         try:
-            for idx, row in ai_df.iterrows():
+            for idx, row in enumerate(ai_rows):
                 record = CleanCostData(
                     file_id=file_id,
                     row_number=idx,
-
-                    # Classic fields
-                    description=row.get("description"),
-                    quantity=row.get("quantity"),
-                    unit_price=row.get("unit_price"),
-                    total_price=row.get("total_price"),
-                    currency=row.get("currency"),
-
-                    # Dates (already ISO)
-                    start_date=row.get("start_date"),
-                    end_date=row.get("end_date"),
-                    renewal_date=row.get("renewal_date"),
-
-                    # AI attributes
-                    ai_attributes=row.get("ai_attributes", {}),
-
-                    # Metadata
+                    ai_attributes=row.get("attributes", {}),
                     source_format=row.get("source_format"),
-                    page_number=row.get("page_number"),
+                    page_number=row.get("page"),
+                    sheet_number=row.get("sheet"),
                 )
-
                 db.add(record)
 
             db.commit()

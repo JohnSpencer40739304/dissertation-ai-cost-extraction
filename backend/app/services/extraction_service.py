@@ -21,11 +21,14 @@
 
 import pandas as pd
 import fitz  # PyMuPDF
+import re
 import pytesseract
 import os # row added for metadata week 4
 import time # row added for metadata week 4
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-
+from PIL import Image, ImageFilter, ImageOps, ImageEnhance
+import numpy as np
+import json
 
 # EXCEL EXTRACTION (original code above and unchanged)
 
@@ -97,10 +100,26 @@ def extract_images_from_page(page):
     return images
 
 
+# found to be too week in spotting text with an image table
+#def ocr_image(image):
+#    return pytesseract.image_to_string(image)
+
+
+def preprocess_for_ocr(image):
+    img = image.convert("L")
+    img = ImageEnhance.Contrast(img).enhance(2.5)
+    img = ImageEnhance.Brightness(img).enhance(1.4)
+    img = img.filter(ImageFilter.SHARPEN)
+    w, h = img.size
+    img = img.resize((w * 3, h * 3))  # 3× upscale
+    img = img.point(lambda x: 0 if x < 150 else 255, '1')
+    return img
+
 def ocr_image(image):
-    return pytesseract.image_to_string(image)
+    processed = preprocess_for_ocr(image)
+    return pytesseract.image_to_string(processed)
 
-
+""" # Original table Parser does not deal with tables that are images
 def parse_table_from_text(text):
     rows = []
     for line in text.split("\n"):
@@ -108,6 +127,18 @@ def parse_table_from_text(text):
         if cells:
             rows.append(cells)
     return rows
+"""
+
+# new table parser to work with OCR
+def parse_table_from_text(text):
+    rows = []
+    for line in text.split("\n"):
+        cells = re.split(r"\s{2,}", line.strip())
+        cells = [c for c in cells if c]
+        if len(cells) >= 2:
+            rows.append(cells)
+    return rows
+
 
 
 
@@ -218,9 +249,16 @@ def extract_docx_images(file_path):
                 image_data = docx_zip.read(file)
                 image = Image.open(io.BytesIO(image_data))
                 #images.append(image)
-                images.append(pil_image_to_base64(image)) 
+                # images.append(pil_image_to_base64(image))
+                images.append(image)  # return PIL image directly 
 
     return images
+
+
+
+
+
+
 
 # merge all word part results
 def extract_docx(file_path):
@@ -253,11 +291,14 @@ def extract_docx(file_path):
 from backend.modules.db import get_db, ExtractedContent
 
 def extract_tables(file_id: int):
-    
     db = next(get_db())
     record = db.query(ExtractedContent).filter(ExtractedContent.file_id == file_id).first()
 
     if not record:
         return None
 
-    return record.raw_tables
+    try:
+        return json.loads(record.raw_tables)
+    except Exception:
+        return []
+
