@@ -17,6 +17,16 @@ from backend.modules.models import CleanCostData
 from backend.modules.db import SessionLocal
 
 
+# Week 7 addtions to the Classic Normaliser
+from backend.app.tools.currency_tool import CurrencyTool
+from backend.app.tools.matrix_normaliser import MatrixNormaliser
+from backend.app.tools.rating_attribute_extractor import RatingAttributeExtractor
+# Week 7 but for post normalisation cleaning
+from backend.app.services.normalisation_service_post import PostProcessingNormaliser
+from backend.app.services.memory_store import MemoryStore
+
+
+
 #-------------------------------------------------------------------------------------
 # Classic normalisation
 # New light simple version - classic normalisation fails with adhoc files. Generative AI will be used instead.
@@ -46,7 +56,7 @@ class ClassicNormaliser:
 
 #The rewrite of the extractor section  to include OpenAI to read tables that were not tables create 2 types of structure outputs. So it now needs to adapt.
 class ClassicNormaliser:
-   
+
     def __init__(self, extracted_tables):
         self.tables = extracted_tables
 
@@ -55,15 +65,65 @@ class ClassicNormaliser:
 
         for table in self.tables:
 
+            #    ------------------------------------------
+            #  WEEK 7 - New seperate step  for sorting out headers from rows
+            headers = None
+            rows = None
 
-            # CASE 1 — AI fallback table
-            if isinstance(table, dict) and "headers" in table and "rows" in table:
-                headers = [str(h).strip() for h in table["headers"]]
+            if isinstance(table, dict) and "headers" in table and "rows" in table: # already existed in previous week but moved in week 7
+                headers = [str(h).strip() for h in table["headers"]] # already existed in previous week but moved in week 7
+                rows = table["rows"]
+            elif isinstance(table, dict) and "row" in table:
+                headers = None
+                rows = [table["row"]]
+            elif isinstance(table, list):
+                headers = None
+                rows = [table]
+            else:
+                continue
 
-                for row in table["rows"]:
-                    if not row:
-                        continue
+            # ------------------------------------------
+            # Week 7 — Currency cleaning step - returns a currency value AND removes them from numeric fields
+            if headers and rows:
+                cleaned_rows, currency_context = CurrencyTool.process_table(
+                    headers, rows, surrounding_text=table.get("text", "")
+                )
+            else:
+                # No headers → clean row-by-row
+                cleaned_rows = []
+                currency_context = {"cell_level": [], "header_level": [], "document_level": None, "default": "USD"}
 
+                for r in rows:
+                    cleaned_row = []
+                    for cell in r:
+                        numeric, _ = CurrencyTool.process_cell(cell)
+                        cleaned_row.append(numeric if numeric is not None else cell)
+                    cleaned_rows.append(cleaned_row)
+
+            #  ------- ---------------------------------
+            # Week 7 — Matrix detection - this failed to be recognised by AI 
+            if headers:
+                matrix_result = MatrixNormaliser.normalise(headers, cleaned_rows, {
+                    "page": table.get("page"),
+                    "sheet": table.get("sheet")
+                })
+            else:
+                matrix_result = None
+
+            if matrix_result:
+                # Add currency context
+                for r in matrix_result:
+                    r["attributes"]["currency_context"] = currency_context
+                normalised_rows.extend(matrix_result)
+                continue
+
+            # -------------------------------
+            # End of Week 7 additions above 
+            # Fallback to previous week logic
+
+            if headers:
+                # CASE 1 — AI fallback table
+                for row in cleaned_rows:
                     cells = [str(c).strip() if c is not None else "" for c in row]
                     row_dict = dict(zip(headers, cells))
 
@@ -72,35 +132,41 @@ class ClassicNormaliser:
                         "attributes": row_dict,
                         "page": table.get("page"),
                         "sheet": table.get("sheet"),
-                        "source_format": table.get("source_format", "ai_fallback")
+                        "source_format": table.get("source_format", "ai_fallback"),
+                        "currency_context": currency_context
                     })
 
-            # CASE 2 — Deterministic extractors 
             elif isinstance(table, dict) and "row" in table:
-                cells = [str(c).strip() for c in table["row"] if c not in ("", None)]
-
+                # CASE 2 — Deterministic extractors
+                cells = [str(c).strip() for c in cleaned_rows[0] if c not in ("", None)]
                 if cells:
                     normalised_rows.append({
                         "cells": cells,
                         "attributes": {},
                         "page": table.get("page"),
                         "sheet": table.get("sheet"),
-                        "source_format": table.get("source_format")
+                        "source_format": table.get("source_format"),
+                        "currency_context": currency_context
                     })
 
-            # CASE 3 — Unexpected format (fail-safe) interpreting as a simple list
             else:
-                if isinstance(table, list):
-                    cells = [str(c).strip() for c in table]
-                    normalised_rows.append({
-                        "cells": cells,
-                        "attributes": {},
-                        "page": None,
-                        "sheet": None,
-                        "source_format": "unknown"
-                    })
+                # CASE 3 — Unexpected format
+                cells = [str(c).strip() for c in cleaned_rows[0]]
+                normalised_rows.append({
+                    "cells": cells,
+                    "attributes": {},
+                    "page": None,
+                    "sheet": None,
+                    "source_format": "unknown",
+                    "currency_context": currency_context
+                })
 
+        #  ---------- ------------ ---------
+        # Week 7  — Rating attribute patterns
+        normalised_rows = RatingAttributeExtractor.process(normalised_rows)
+        # ---------------end of ----------------
         return normalised_rows
+
 
 
 # --------------------------------------------------------------------------------
@@ -177,8 +243,7 @@ class AINormaliser:
 
         content = json.loads(response.choices[0].message.content)
         return content["rows"], content["summary"]
-
-
+ 
 
 # -----------------------------------------------------------------------
 # merges 2 above into a single call
@@ -188,18 +253,54 @@ class AINormaliser:
 class NormalisationService:
 
     def normalise(self, table, file_metadata):
+        # step 0 stops the program from bugging if nothing is returned
+        if not table or len(table) == 0:
+            return {
+                "status": "no_pricing_found",
+                "classic_clean": [],
+                "ai_enriched": []
+            }
+        all_empty = True
+        for t in table:
+            if isinstance(t, dict):
+                if t.get("rows") or t.get("row"):
+                    all_empty = False
+            elif isinstance(t, list) and len(t) > 0:
+                all_empty = False
+        if all_empty:
+            return {
+                "status": "no_pricing_found",
+                "classic_clean": [],
+                "ai_enriched": []
+            }
+        
+
         # 1 — Classic normalisation
         classic = ClassicNormaliser(table)
-        rows = classic.run()
+        #rows = classic.run()    # Week 7 correction
+        classic_rows = classic.run()
 
         # 2 — AI enrichment
         memory = MemoryStore(db_session_factory=SessionLocal)
-        ai = AINormaliser(rows, file_metadata, memory)
+        # ai = AINormaliser(rows, file_metadata, memory) # Week 7 change
+        ai = AINormaliser(classic_rows, file_metadata, memory)
         ai_rows = ai.run(file_metadata["file_id"])
 
+        # 3 — Week 7  addition -- Semantic AI + schema validation 
+        post = PostProcessingNormaliser(ai_rows)
+        final_rows = post.run()
+
+        """ replaced in Week 7 by below
         return {
             "classic_clean": rows,
             "ai_enriched": ai_rows
+        }
+        """
+
+        # Week 7 modification for Post normalisation service
+        return {
+            "classic_clean": classic_rows,
+            "ai_enriched": final_rows
         }
 
     def save_to_db(self, file_id: int, ai_rows):
@@ -225,6 +326,5 @@ class NormalisationService:
 
         finally:
             db.close()
-
 
 

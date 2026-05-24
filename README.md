@@ -8,6 +8,55 @@
 ### Module Leader: Dr Mouad Lemoudden
 Dissertation Project 2026 -  to see if AI can be used to extract and extrapolate dispersed supplier cost data from various different formats and incomplete data sets. Telecom products will be the used example.
 
+# Week 7 (v20260522) - Refinements to Normalisation step
+
+The pipeline currently follows these steps:
+
+1. **File extraction**
+   - Extracts tables from the uploaded file.
+   - For Excel: extracts all sheets but only processes the *first* one.
+   - For Word: extracts all tables but merges them into a single list of rows.
+2. **Classic Normalisation**
+   - Attempts to convert raw rows into a simple `[service, rating, price]` schema.
+   - Works only for very simple, single‑table inputs.
+3. **AI Normalisation**
+   - Uses an LLM to infer missing attributes and clean values.
+4. **Semantic Normalisation**
+   - Applies a second AI pass to assign meaning (service, rating type, currency, etc.).
+5. **Database Storage**
+   - Saves the final rows into PostgreSQL under a single `file_id`.
+
+##  Known Limitations (Current State)
+###  1. Only the first sheet of an Excel file is processed  
+Even though extraction detects all sheets, the normaliser only receives the
+first one. Multi‑sheet Excel files therefore produce incomplete or empty output.
+###  2. Word documents with multiple tables are merged incorrectly  
+Tables are concatenated into a single row list, causing:
+- lost table boundaries  
+- lost columns  
+- misaligned rows  
+- semantic misinterpretation  
+###  3. Matrix tables are not supported  
+Wide tables (e.g., bandwidth tiers across columns) are not exploded into
+row‑based records. Most matrix tables currently return **0 rows**.
+###  4. Currency parsing is unreliable  
+Values like `$3,800` may be incorrectly parsed as `3.8`.
+###  5. POP (Point of Presence) is misinterpreted as “Population”  
+Semantic AI currently lacks telecom‑specific glossary rules.
+###  6. The pipeline assumes “one file = one table”  
+This assumption is incompatible with real telecom pricing documents.
+
+## 📉 Current Behaviour
+- Simple, single‑table documents may work.
+- Multi‑table Word files produce partial or incorrect results.
+- Multi‑sheet Excel files often return **zero rows**.
+- Matrix tables are not handled at all.
+- Semantic AI produces inconsistent interpretations due to upstream issues.
+
+This repository currently represents a **failed prototype** pending a major
+refactor.
+
+
 # Week 6 (v20260515) - AI powered Cost Extraction and Normalisation
 
 After OCRs failed to extract tabled data from images, the extraction step was modified to include AI for those tricky to find tables.
