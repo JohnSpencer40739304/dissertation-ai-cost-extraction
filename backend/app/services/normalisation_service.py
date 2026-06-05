@@ -1,330 +1,412 @@
-
-
-#import pandas as pd
-#import numpy as np
-#import re
 import json
-from typing import List, Dict, Any
-from backend.app.tools.date_parser import looks_like_date, normalise_date # later added as dates are a complex subject
+from sqlalchemy.orm import Session
 
-
-# Open AI nomrmaliser moved to below to within a function so it is not called before it is needed and to avoid fast API Startup issues
-# from openai import OpenAI
-# client = OpenAI() 
-
-# originally result returned only a dataframe, these two lines added to store in database
-from backend.modules.models import CleanCostData
-from backend.modules.db import SessionLocal
-
-
-# Week 7 addtions to the Classic Normaliser
-from backend.app.tools.currency_tool import CurrencyTool
-from backend.app.tools.matrix_normaliser import MatrixNormaliser
-from backend.app.tools.rating_attribute_extractor import RatingAttributeExtractor
-# Week 7 but for post normalisation cleaning
-from backend.app.services.normalisation_service_post import PostProcessingNormaliser
-from backend.app.services.memory_store import MemoryStore
-
-
-
-#-------------------------------------------------------------------------------------
-# Classic normalisation
-# New light simple version - classic normalisation fails with adhoc files. Generative AI will be used instead.
-# this will return a list of rows for AI instead of a dataframe
-
-
-"""
-class ClassicNormaliser:
-    def __init__(self, extracted_tables):
-        self.extracted_tables = extracted_tables
-
-    def run(self):
-        rows = []
-
-        for item in self.extracted_tables:
-            if isinstance(item, dict) and "row" in item:
-                cells = [str(c) for c in item["row"] if c not in ("", None)]
-                if cells:
-                    rows.append({
-                        "cells": cells,
-                        "page": item.get("page"),
-                        "sheet": item.get("sheet"),
-                        "source_format": item.get("source_format")
-                    })
-        return rows
-"""
-
-#The rewrite of the extractor section  to include OpenAI to read tables that were not tables create 2 types of structure outputs. So it now needs to adapt.
-class ClassicNormaliser:
-
-    def __init__(self, extracted_tables):
-        self.tables = extracted_tables
-
-    def run(self):
-        normalised_rows = []
-
-        for table in self.tables:
-
-            #    ------------------------------------------
-            #  WEEK 7 - New seperate step  for sorting out headers from rows
-            headers = None
-            rows = None
-
-            if isinstance(table, dict) and "headers" in table and "rows" in table: # already existed in previous week but moved in week 7
-                headers = [str(h).strip() for h in table["headers"]] # already existed in previous week but moved in week 7
-                rows = table["rows"]
-            elif isinstance(table, dict) and "row" in table:
-                headers = None
-                rows = [table["row"]]
-            elif isinstance(table, list):
-                headers = None
-                rows = [table]
-            else:
-                continue
-
-            # ------------------------------------------
-            # Week 7 — Currency cleaning step - returns a currency value AND removes them from numeric fields
-            if headers and rows:
-                cleaned_rows, currency_context = CurrencyTool.process_table(
-                    headers, rows, surrounding_text=table.get("text", "")
-                )
-            else:
-                # No headers → clean row-by-row
-                cleaned_rows = []
-                currency_context = {"cell_level": [], "header_level": [], "document_level": None, "default": "USD"}
-
-                for r in rows:
-                    cleaned_row = []
-                    for cell in r:
-                        numeric, _ = CurrencyTool.process_cell(cell)
-                        cleaned_row.append(numeric if numeric is not None else cell)
-                    cleaned_rows.append(cleaned_row)
-
-            #  ------- ---------------------------------
-            # Week 7 — Matrix detection - this failed to be recognised by AI 
-            if headers:
-                matrix_result = MatrixNormaliser.normalise(headers, cleaned_rows, {
-                    "page": table.get("page"),
-                    "sheet": table.get("sheet")
-                })
-            else:
-                matrix_result = None
-
-            if matrix_result:
-                # Add currency context
-                for r in matrix_result:
-                    r["attributes"]["currency_context"] = currency_context
-                normalised_rows.extend(matrix_result)
-                continue
-
-            # -------------------------------
-            # End of Week 7 additions above 
-            # Fallback to previous week logic
-
-            if headers:
-                # CASE 1 — AI fallback table
-                for row in cleaned_rows:
-                    cells = [str(c).strip() if c is not None else "" for c in row]
-                    row_dict = dict(zip(headers, cells))
-
-                    normalised_rows.append({
-                        "cells": cells,
-                        "attributes": row_dict,
-                        "page": table.get("page"),
-                        "sheet": table.get("sheet"),
-                        "source_format": table.get("source_format", "ai_fallback"),
-                        "currency_context": currency_context
-                    })
-
-            elif isinstance(table, dict) and "row" in table:
-                # CASE 2 — Deterministic extractors
-                cells = [str(c).strip() for c in cleaned_rows[0] if c not in ("", None)]
-                if cells:
-                    normalised_rows.append({
-                        "cells": cells,
-                        "attributes": {},
-                        "page": table.get("page"),
-                        "sheet": table.get("sheet"),
-                        "source_format": table.get("source_format"),
-                        "currency_context": currency_context
-                    })
-
-            else:
-                # CASE 3 — Unexpected format
-                cells = [str(c).strip() for c in cleaned_rows[0]]
-                normalised_rows.append({
-                    "cells": cells,
-                    "attributes": {},
-                    "page": None,
-                    "sheet": None,
-                    "source_format": "unknown",
-                    "currency_context": currency_context
-                })
-
-        #  ---------- ------------ ---------
-        # Week 7  — Rating attribute patterns
-        normalised_rows = RatingAttributeExtractor.process(normalised_rows)
-        # ---------------end of ----------------
-        return normalised_rows
-
-
-
-# --------------------------------------------------------------------------------
-# AI normalisation
-# Uses AI to normalise data
-# Based on normalised table above but creates another table to allow for comparison
-
-
-from backend.app.tools.adaptive_batch_size import get_adaptive_batch_size
-from backend.app.tools.batch_overlap import create_overlapping_batches
-from backend.app.services.memory_store import MemoryStore
-from backend.app.tools.prompt_templates import BATCH_PROMPT_TEMPLATE
 from openai import OpenAI
+ai_client = OpenAI()
 
-class AINormaliser:
-    def __init__(self, rows, file_metadata, memory_store):
-        self.rows = rows
-        self.file_metadata = file_metadata
-        self.memory = memory_store
-        self.client = OpenAI()
+from backend.modules.db import SessionLocal, get_db
+from backend.modules.models import (
+    CleanCostData,
+    CleanCostDataAttributes,
+    NormalisedContent
+)
 
-    def run(self, file_id):
-        total = len(self.rows)
-        batch_size = get_adaptive_batch_size(total)
-        batch_size = max(1, batch_size or 1)
-        batches = create_overlapping_batches(self.rows, batch_size)
+from backend.app.tools.cleaning import clean_numeric
 
-
-
-        enriched = []
-
-        for idx, batch in enumerate(batches):
-            prev_summary = self.memory.get_previous_summary(file_id, idx)
-            result, summary = self._process_batch(batch, prev_summary)
-            enriched.extend(result)
-            self.memory.save_summary(file_id, idx, summary)
-
-        return enriched
-
-    def _process_batch(self, batch, prev_summary):
+def is_numeric(v):
+    if isinstance(v, (int, float)):
+        return True
+    if isinstance(v, str):
+        try:
+            float(v)
+            return True
+        except:
+            return False
+    return False
 
 
-        prompt = BATCH_PROMPT_TEMPLATE.format(
-            user_instruction="We have recieved a messy costing file. Please normalise and extarct extract structured cost attributes.",
-            source_format=self.file_metadata.get("source_format"),
-            page_numbers=list({r.get("page") for r in batch}),
-            sheet_names=list({r.get("sheet") for r in batch}),
-            previous_summary=prev_summary or "None",
-            batch_rows=batch
-        )
-        
-       
-        # first prompt attempt
-        #prompt = f"""
-        #User instruction: Extract structured cost attributes.
-        #File type: {self.file_metadata.get('source_format')}
-        #Previous batch summary:
-        #{prev_summary or "None"}
-        #Current batch rows:
-        #{batch}
-        #Return JSON:
-        #{{
-        #    "rows": [...],
-        #    "summary": {{...}}
-        #}}
-        #"""
-        
 
-        response = self.client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"}
-        )
-
-        content = json.loads(response.choices[0].message.content)
-        return content["rows"], content["summary"]
- 
-
-# -----------------------------------------------------------------------
-# merges 2 above into a single call
-
-
-# above modified to store data
 class NormalisationService:
 
-    def normalise(self, table, file_metadata):
-        # step 0 stops the program from bugging if nothing is returned
-        if not table or len(table) == 0:
-            return {
-                "status": "no_pricing_found",
-                "classic_clean": [],
-                "ai_enriched": []
-            }
-        all_empty = True
-        for t in table:
-            if isinstance(t, dict):
-                if t.get("rows") or t.get("row"):
-                    all_empty = False
-            elif isinstance(t, list) and len(t) > 0:
-                all_empty = False
-        if all_empty:
-            return {
-                "status": "no_pricing_found",
-                "classic_clean": [],
-                "ai_enriched": []
-            }
-        
+    def __init__(self, raw_extraction: dict):
+        self.raw = raw_extraction
+        self.file_id = raw_extraction.get("file_id")
+        self.db = SessionLocal()
 
-        # 1 — Classic normalisation
-        classic = ClassicNormaliser(table)
-        #rows = classic.run()    # Week 7 correction
-        classic_rows = classic.run()
+    # ---------------------------------------------------------
+    # Simple Currency inference (could be made better)
+    def infer_currency(self, attrs: dict) -> str:
+        text = " ".join(str(v) for v in attrs.values() if v)
 
-        # 2 — AI enrichment
-        memory = MemoryStore(db_session_factory=SessionLocal)
-        # ai = AINormaliser(rows, file_metadata, memory) # Week 7 change
-        ai = AINormaliser(classic_rows, file_metadata, memory)
-        ai_rows = ai.run(file_metadata["file_id"])
+        if "£" in text or "GBP" in text or "UK" in text:
+            return "GBP"
+        if "€" in text or "EUR" in text or "EU" in text:
+            return "EUR"
+        if "$" in text or "USD" in text or "US" in text:
+            return "USD"
 
-        # 3 — Week 7  addition -- Semantic AI + schema validation 
-        post = PostProcessingNormaliser(ai_rows)
-        final_rows = post.run()
+        return "USD"
 
-        """ replaced in Week 7 by below
-        return {
-            "classic_clean": rows,
-            "ai_enriched": ai_rows
+    # ---------------------------------------------------------
+    # Main Pipeline
+    def run(self):
+        print("\n\n================ RAW EXTRACTION ================\n")
+        print(json.dumps(self.raw, indent=2, ensure_ascii=False)[:5000])
+        print("\n================================================\n\n")
+
+        # Always read raw_tables first
+        tables = self.raw.get("raw_tables") or self.raw.get("tables") or []
+
+        print("TABLES SOURCE:", "raw_tables" if self.raw.get("raw_tables") else "tables")
+
+        if not tables:
+            return {"tables": [], "document_explanation": "", "clarifying_questions": []}
+
+        merged_tables = []
+
+        # --------------------------------------------------
+        # For handling multiple tables
+        for table_index, table in enumerate(tables):
+            header = table.get("header") or table.get("headers") or []
+            rows = table.get("rows", [])
+
+            if not header or not rows:
+                continue
+
+            # Safety: skip malformed rows
+            if not isinstance(rows[0], (dict, list)):
+                continue
+
+            # 1. Clean rows (support both dict and list formats)
+            cleaned_rows = []
+
+            # Case A: rows are already dicts (file 55)
+            if isinstance(rows[0], dict):
+                for r in rows:
+                    mapped = {}
+                    for h in header:
+                        v = r.get(h)
+                        mapped[str(h)] = clean_numeric(v)
+                    cleaned_rows.append(mapped)
+
+            # Case B: rows are lists (file 52)
+            else:
+                for r in rows:
+                    mapped = {}
+                    for i, h in enumerate(header):
+                        if i < len(r):
+                            mapped[str(h)] = clean_numeric(r[i])
+                        else:
+                            mapped[str(h)] = None
+                    cleaned_rows.append(mapped)
+
+            # 2. CLASSIFY BEFORE BUILDING final_rows
+            table_type = self.classify_table_ai(header, cleaned_rows)
+
+            # 3. If matrix → explode first
+            #if table_type == "matrix_table":
+            if table_type and table_type.strip().lower() == "matrix_table":
+                cleaned_rows = self.explode_matrix_table(header, cleaned_rows)
+            elif table_type == "garbage_table":
+                continue
+
+            # 4. Build final_rows AFTER classification/explosion
+            final_rows = []
+            for row_index, r in enumerate(cleaned_rows):
+                final_rows.append({
+                    "row_index": row_index,
+                    "attributes": r,
+                    "confidence": 1.0
+                })
+
+            merged_tables.append({
+                "sheet_name": table.get("sheet_name", "sheet"),
+                "table_index": table_index,
+                "title": None,
+                "rows": final_rows
+            })
+
+        merged_output = {
+            "tables": merged_tables,
+            "document_explanation": "Direct normalisation from extractor output.",
+            "clarifying_questions": []
         }
-        """
 
-        # Week 7 modification for Post normalisation service
-        return {
-            "classic_clean": classic_rows,
-            "ai_enriched": final_rows
-        }
+        # Save raw normalised rows (debug)
+        self.save_to_normalised_content(self.file_id, merged_output)
 
-    def save_to_db(self, file_id: int, ai_rows):
+        # Route into universal schema
+        core_rows, attribute_rows = self.route_core_and_attributes(merged_output)
+        self.save_to_clean_cost_data(core_rows, attribute_rows)
+
+        return merged_output
+
+
+    # ----------------------------------------------------
+    # Week 8  save method
+    def save_to_normalised_content(self, file_id: int, ai_output: dict):
+        db: Session = next(get_db())
+        tables = ai_output.get("tables", [])
+
+        for table in tables:
+            rows = table.get("rows", [])
+            source_format = table.get("sheet_name")
+            for row_index, row in enumerate(rows):
+                entry = NormalisedContent(
+                    file_id=file_id,
+                    row_index=row_index,
+                    attributes=row.get("attributes", {}),
+                    confidence=row.get("confidence"),
+                    source_format=source_format
+                )
+                db.add(entry)
+
+        db.commit()
+
+    # ---------------------------------------------------------
+    # route to the universal schema
+
+    def route_core_and_attributes(self, merged_output):
+        core_rows = []
+        attribute_rows = []
+
+        for table in merged_output.get("tables", []):
+            rows = table.get("rows", [])
+            table_index = table.get("table_index")
+            sheet_name = table.get("sheet_name")
+
+            for idx, row in enumerate(rows):
+
+                attrs = row.get("attributes") or row
+
+                # -----------------------------------------
+                #   Matrix logic (Dimension + Value) as country is a common value
+
+                if "Dimension" in attrs and "Value" in attrs:
+                    item_description = attrs.get("Country") or attrs.get("ISO Ctry Code")
+                    v = attrs.get("Value")
+                    unit_price = float(v) if is_numeric(v) else None
+                    quantity = 1
+
+                # -----------------------------------------
+                # Generic  (non-matrix rows)
+                else:
+                    # 1. Item description
+                    item_description = next(
+                        (v for v in attrs.values() if isinstance(v, str) and v.strip()),
+                        "Item"
+                    )
+
+                    # 2. Unit price
+                    unit_price = None
+                    for v in attrs.values():
+                        if is_numeric(v):
+                            unit_price = float(v)
+                            break
+                        if isinstance(v, str) and any(sym in v for sym in ["$", "€", "£"]):
+                            cleaned = v.replace("$", "").replace("€", "").replace("£", "").replace(",", "")
+                            try:
+                                unit_price = float(cleaned)
+                                break
+                            except:
+                                pass
+
+                    # 3. Quantity
+                    quantity = None
+                    for v in attrs.values():
+                        if isinstance(v, int) and (unit_price is None or v != unit_price):
+                            quantity = v
+                            break
+
+                    if quantity is None:
+                        quantity = 1
+                # ----------------------------
+                # Row to go into core cost data sheet
+                core = {
+                    "file_id": self.file_id,
+                    "sheet_name": sheet_name,
+                    "table_index": table_index,
+                    "row_index": idx,
+                    "item_description": item_description,
+                    "unit_price": unit_price,
+                    "currency": self.infer_currency(attrs),
+                    "quantity": quantity,
+                    "ai_confidence_overall": row.get("confidence", 1.0)
+                }
+                core_rows.append(core)
+
+                # -------------------------
+                # Rows for extended attributs
+
+                cost_item_id = len(core_rows)
+                for name, value in attrs.items():
+                    attribute_rows.append({
+                        "cost_item_id": cost_item_id,
+                        "attribute_name": name,
+                        "attribute_value": value,
+                        "extraction_method": "extractor",
+                        "confidence_score": row.get("confidence", 1.0)
+                    })
+                # ----------------------------------
+                # Price type  tagging
+                if "price_type" in attrs and attrs["price_type"]:
+                    attribute_rows.append({
+                        "cost_item_id": cost_item_id,
+                        "attribute_name": "price_type",
+                        "attribute_value": attrs["price_type"],
+                        "extraction_method": "ai",
+                        "confidence_score": 1.0
+                    })
+
+        return core_rows, attribute_rows
+
+
+    # ----------------------------------------
+    # Save to tables 
+    def save_to_clean_cost_data(self, core_rows, attribute_rows):
         db = SessionLocal()
 
         try:
-            for idx, row in enumerate(ai_rows):
-                record = CleanCostData(
-                    file_id=file_id,
-                    row_number=idx,
-                    ai_attributes=row.get("attributes", {}),
-                    source_format=row.get("source_format"),
-                    page_number=row.get("page"),
-                    sheet_number=row.get("sheet"),
+            # Remove previous results
+            db.query(CleanCostDataAttributes).filter(
+                CleanCostDataAttributes.cost_item_id.in_(
+                    db.query(CleanCostData.id).filter(CleanCostData.file_id == self.file_id)
                 )
-                db.add(record)
+            ).delete(synchronize_session=False)
+
+            db.query(CleanCostData).filter(
+                CleanCostData.file_id == self.file_id
+            ).delete(synchronize_session=False)
+
+            db.flush()
+            id_map = {}
+
+            # Insert core rows
+            for idx, core in enumerate(core_rows):
+                obj = CleanCostData(**core)
+                db.add(obj)
+                db.flush()
+                id_map[idx + 1] = obj.id
+
+            # Insert attributes
+            for attr in attribute_rows:
+                local_id = attr["cost_item_id"]
+                attr["cost_item_id"] = id_map[local_id]
+                db.add(CleanCostDataAttributes(**attr))
 
             db.commit()
 
-        except Exception as e:
+        except Exception:
             db.rollback()
-            raise e
+            raise
 
         finally:
             db.close()
 
+
+    def classify_table_ai(self, headers, sample_rows):
+        # --- HARD RULE 1: Numeric headers (bandwidth matrices) ---
+        numeric_headers = 0
+        for h in headers:
+            try:
+                float(h)
+                numeric_headers += 1
+            except:
+                pass
+
+        if numeric_headers >= 3:
+            return "matrix_table"
+
+        # --- HARD RULE 2: 1 descriptive + many numeric columns (BVPN region matrices) ---
+        numeric_cols = []
+        for h in headers:
+            values = [row.get(h) for row in sample_rows if isinstance(row, dict)]
+            if not values:
+                continue
+            numeric_count = sum(1 for v in values if isinstance(v, (int, float)))
+            if numeric_count >= 1:
+                numeric_cols.append(h)
+
+        descriptive_cols = [h for h in headers if h not in numeric_cols]
+
+        if len(descriptive_cols) == 1 and len(numeric_cols) >= 2:
+            return "matrix_table"
+
+        # --- Otherwise fall back to AI ---
+        prompt = f"""
+        You are a table classification engine.
+
+        Given the following table headers and sample rows,
+        classify the table into one of these types:
+
+        - simple_cost_table
+        - lookup_table
+        - matrix_table
+        - garbage_table
+
+        HEADERS:
+        {headers}
+
+        SAMPLE ROWS:
+        {sample_rows[:5]}
+
+        Rules:
+        - If the table has 1 descriptive column and many numeric columns → matrix_table
+        - If the table has 2 columns and the second looks like a price → lookup_table
+        - If the table has columns like description/price/quantity → simple_cost_table
+        - If the table is empty or meaningless → garbage_table
+
+        Respond with ONLY the type name.
+        """
+
+        response = ai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0
+        )
+
+        return response.choices[0].message.content.strip()
+
+
+    def explode_matrix_table(self, headers, rows):
+        """
+        Fully agnostic matrix explosion.
+        Works for ANY matrix classified by AI.
+        rows: list of dicts (each dict is a row mapping header -> value)
+        """
+
+        descriptive_cols = []
+        dimension_cols = []
+
+        # 1. Identify descriptive vs numeric columns
+        for h in headers:
+            values = [r.get(h) for r in rows]
+            numeric_count = sum(1 for v in values if isinstance(v, (int, float)))
+            string_count = sum(1 for v in values if isinstance(v, str) and v.strip())
+
+            if numeric_count > string_count:
+                dimension_cols.append(h)
+            else:
+                descriptive_cols.append(h)
+
+        if not dimension_cols:
+            return rows
+
+        # 2. Build exploded atomic rows
+        exploded = []
+
+        for r in rows:
+            desc_values = {col: r.get(col) for col in descriptive_cols}
+
+            for dim in dimension_cols:
+                val = r.get(dim)
+
+                if isinstance(val, (int, float)):
+                    exploded.append({
+                        **desc_values,
+                        "Dimension": dim,
+                        "Value": val
+                    })
+
+        return exploded
 

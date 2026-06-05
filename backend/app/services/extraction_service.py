@@ -1,57 +1,44 @@
-# WEEK 3 - Data Extraction Scripts
-# Initial Extractor for Excel files ONLY
-# import pandas as pd
-
-# def extract_excel(path: str):
-#     xls = pd.ExcelFile(path)
-#     sheets_output = []
-#     for sheet_name in xls.sheet_names:
-#         df = pd.read_excel(path, sheet_name=sheet_name, header=None)
-#         df = df.fillna("").astype(str)
-#         sheets_output.append({
-#             "sheet_name": sheet_name,
-#             "rows": df.values.tolist()
-#         })
-
-#     return sheets_output
-
-
-# WEEK 3 - Data Extraction Scripts
-# Now with PDF aded giving Excel + PDF (text + image + OCR) extraction
-
 import pandas as pd
 import fitz  # PyMuPDF
-import re
 import pytesseract
-import os # row added for metadata week 4
-import time # row added for metadata week 4
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-from PIL import Image, ImageFilter, ImageOps, ImageEnhance
+import re
+import os
+import time
+from PIL import Image, ImageFilter, ImageEnhance
 import numpy as np
-import json
+from docx import Document
+import zipfile
+import io
+from PIL import Image as PILImage
+import openpyxl
 
-# EXCEL EXTRACTION (original code above and unchanged)
-
-#week 5 conversion of everything to a class
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 
+
+# EXCEL EXTRACTION — Week 6 + multi-sheet + your two fields
+"""
 def extract_excel(path: str):
-    start = time.time() # row added for metadata week 4
+    start = time.time()
     xls = pd.ExcelFile(path)
     sheets_output = []
-    rows_per_sheet = {}  # week 4 row added for metadata 
-    columns_per_sheet = {}  # week 4 row added for metadata
+    rows_per_sheet = {}
+    columns_per_sheet = {}
+
     for sheet_name in xls.sheet_names:
         df = pd.read_excel(path, sheet_name=sheet_name, header=None)
         df = df.fillna("").astype(str)
-        rows_per_sheet[sheet_name] = df.shape[0]  # week 4 row added for metadata
-        columns_per_sheet[sheet_name] = df.shape[1]  # week 4 row added for metadata
+
+        rows_per_sheet[sheet_name] = df.shape[0]
+        columns_per_sheet[sheet_name] = df.shape[1]
+
         sheets_output.append({
             "sheet_name": sheet_name,
+            "table_index": len(sheets_output),
+            "headers": [],
             "rows": df.values.tolist()
         })
-    
-    # week 5 metadata section
+
     metadata = {
         "sheet_count": len(xls.sheet_names),
         "rows_per_sheet": rows_per_sheet,
@@ -60,18 +47,93 @@ def extract_excel(path: str):
         "extraction_time_ms": int((time.time() - start) * 1000)
     }
 
-    #return sheets_output
-    # Week 4 modif
     return {
         "tables": sheets_output,
+        "metadata": metadata
+    }
+
+"""
+
+
+def extract_excel(file_path: str):
+    wb = openpyxl.load_workbook(file_path, data_only=True)
+    tables = []
+    metadata = {"sheets_extracted": 0}
+
+    
+    def detect_header_row(rows):
+        for i, row in enumerate(rows):
+            # Must have at least 3 non-empty cells
+            non_empty = [str(c).strip() for c in row if str(c).strip()]
+            if len(non_empty) < 3:
+                continue
+
+            # Header row must NOT contain currency values
+            #if any(re.match(r"^[\d\.,]+$", c) for c in non_empty):
+            #    continue
+
+            if any("$" in c or "€" in c or "£" in c for c in non_empty):
+                continue
+
+            # Next row must contain at least one numeric value
+            if i + 1 < len(rows):
+                next_row = rows[i + 1]
+                next_non_empty = [str(c).strip() for c in next_row if str(c).strip()]
+
+                # Accept mixed text + numeric
+                if any(re.match(r"^[\d\.,]+$", c) for c in next_non_empty):
+                    return i
+
+        return None
+
+
+
+
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+
+        # Read all rows
+        raw_rows = []
+        for row in ws.iter_rows(values_only=True):
+            raw_rows.append([c if c is not None else "" for c in row])
+
+        # Find the header
+        header_index = detect_header_row(raw_rows)
+        if header_index is None:
+            continue
+
+        header_row = raw_rows[header_index]
+        header = [str(c).strip() for c in header_row]
+
+        # Extract data rows
+        data_rows = []
+        for row in raw_rows[header_index + 1:]:
+            if all(not str(c).strip() for c in row):
+                continue
+
+            values = row[:len(header)]
+            mapped = dict(zip(header, values))
+            data_rows.append(mapped)
+
+
+        tables.append({
+            "sheet_name": sheet_name,
+            "table_index": len(tables),
+            "headers": header,
+            "rows": data_rows
+        })
+
+        metadata["sheets_extracted"] += 1
+
+    return {
+        "tables": tables,
         "metadata": metadata
     }
 
 
 
 # ---------------------------------------------------------
-# PDF SECTION 
-# various helpers
+# week 6 PDF helpers
 
 def page_has_text(page):
     text = page.get_text("text")
@@ -88,21 +150,13 @@ def extract_images_from_page(page):
         xref = img[0]
         pix = fitz.Pixmap(page.parent, xref)
 
-        # RGB or grayscale
         if pix.n < 5:
-            #images.append(pix.get_pil_image()) # obsolete version replaced below
             images.append(pix.pil_image())
         else:
-            # CMYK → convert to RGB
             pix = fitz.Pixmap(fitz.csRGB, pix)
             images.append(pix.get_pil_image())
 
     return images
-
-
-# found to be too week in spotting text with an image table
-#def ocr_image(image):
-#    return pytesseract.image_to_string(image)
 
 
 def preprocess_for_ocr(image):
@@ -111,25 +165,16 @@ def preprocess_for_ocr(image):
     img = ImageEnhance.Brightness(img).enhance(1.4)
     img = img.filter(ImageFilter.SHARPEN)
     w, h = img.size
-    img = img.resize((w * 3, h * 3))  # 3× upscale
+    img = img.resize((w * 3, h * 3))
     img = img.point(lambda x: 0 if x < 150 else 255, '1')
     return img
+
 
 def ocr_image(image):
     processed = preprocess_for_ocr(image)
     return pytesseract.image_to_string(processed)
 
-""" # Original table Parser does not deal with tables that are images
-def parse_table_from_text(text):
-    rows = []
-    for line in text.split("\n"):
-        cells = [c.strip() for c in line.split() if c.strip()]
-        if cells:
-            rows.append(cells)
-    return rows
-"""
 
-# new table parser to work with OCR
 def parse_table_from_text(text):
     rows = []
     for line in text.split("\n"):
@@ -140,55 +185,49 @@ def parse_table_from_text(text):
     return rows
 
 
-
-
-# PDF EXTRACTION
-def process_pdf_page(page, page_num):
-    result = {
-        "page": page_num + 1,
-        "text": None,
-        "image_tables": []
-    }
-
-    # Look for text
-    if page_has_text(page):
-        result["text"] = extract_text_from_page(page)
-
-    # look for images and OCR read them
-    images = extract_images_from_page(page)
-    for img in images:
-        ocr_text = ocr_image(img)
-        table = parse_table_from_text(ocr_text)
-        if table:
-            result["image_tables"].append(table)
-
-    return result
-
+# ---------------------
+# week 6 PDF extractor
 
 def extract_pdf(path: str):
-    start = time.time() # Week 4 modif for metadata
+    start = time.time()
     doc = fitz.open(path)
     pages_output = []
 
-    # Week 4 modif
     total_tables = 0
     total_images = 0
     ocr_used = False
 
     for page_num, page in enumerate(doc):
-        #pages_output.append(process_pdf_page(page, page_num))
+        page_result = {
+            "page": page_num + 1,
+            "text": None,
+            "image_tables": []
+        }
 
-        # Weeek 4 modifications for Metadata
-        page_result = process_pdf_page(page, page_num)
-        pages_output.append(page_result)
-        # wook 4 - Count tables extracted from OCR
-        total_tables += len(page_result.get("image_tables", []))
-        # week 4 - Count images processed for meta
-        images = extract_images_from_page(page) # week 4  correction due to error during testing
+        page_text = extract_text_from_page(page)
+        if page_text:
+            page_result["text"] = page_text
+
+        images = extract_images_from_page(page)
         total_images += len(images)
-        # week 4  - If any OCR text was used note it down
+
+        for img in images:
+            ocr_text = ocr_image(img)
+            legacy_table = parse_table_from_text(ocr_text)
+            if legacy_table:
+                page_result["image_tables"].append({
+                    "source": "pdf_ocr",
+                    "page_number": page_num + 1,
+                    "table_index": len(page_result["image_tables"]),
+                    "headers": [],
+                    "rows": legacy_table
+                })
+
         if len(images) > 0:
             ocr_used = True
+
+        total_tables += len(page_result["image_tables"])
+        pages_output.append(page_result)
 
     metadata = {
         "page_count": len(doc),
@@ -203,73 +242,45 @@ def extract_pdf(path: str):
         "pages": pages_output,
         "metadata": metadata
     }
-    #return pages_output
 
 
-# --------------------------------------------------------------
-# WORD SECTION 
-
-# Text and paragraphs section
-from docx import Document
-import base64
-import io
-
-def pil_image_to_base64(image):
-    buffer = io.BytesIO()
-    image.save(buffer, format="PNG")
-    return base64.b64encode(buffer.getvalue()).decode("utf-8")
+# ---------------------------------
+# Word docx extraction including images 
 
 def extract_docx_text(doc):
     return "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
 
-#Tables section
+
 def extract_docx_tables(doc):
     tables_output = []
-
     for table in doc.tables:
         table_data = []
         for row in table.rows:
             cells = [cell.text.strip() for cell in row.cells]
             table_data.append(cells)
         tables_output.append(table_data)
-
     return tables_output
 
-# Images section
-import zipfile
-from PIL import Image
-import io
 
 def extract_docx_images(file_path):
     images = []
-
     with zipfile.ZipFile(file_path, 'r') as docx_zip:
         for file in docx_zip.namelist():
             if file.startswith("word/media/"):
                 image_data = docx_zip.read(file)
-                image = Image.open(io.BytesIO(image_data))
-                #images.append(image)
-                # images.append(pil_image_to_base64(image))
-                images.append(image)  # return PIL image directly 
-
+                image = PILImage.open(io.BytesIO(image_data))
+                images.append(image)
     return images
 
 
-
-
-
-
-
-# merge all word part results
 def extract_docx(file_path):
-    start = time.time() # added week 4 for meta data
+    start = time.time()
     doc = Document(file_path)
 
     text = extract_docx_text(doc)
     tables = extract_docx_tables(doc)
     images = extract_docx_images(file_path)
 
-    # Week 4 - Building  metadata
     metadata = {
         "paragraph_count": len(doc.paragraphs),
         "table_count": len(doc.tables),
@@ -278,27 +289,39 @@ def extract_docx(file_path):
         "extraction_time_ms": int((time.time() - start) * 1000)
     }
 
+    all_tables = []
+    text_blocks = []
+    all_images = []
+
+    for t in tables:
+        all_tables.append({
+            "source": "docx_table",
+            "table_index": len(all_tables),
+            "headers": [],
+            "rows": t
+        })
+
+    if text.strip():
+        text_blocks.append({
+            "source": "docx_text",
+            "text": text
+        })
+
+    for img in images:
+        ocr_text = ocr_image(img)
+        legacy_table = parse_table_from_text(ocr_text)
+        if legacy_table:
+            all_tables.append({
+                "source": "docx_ocr",
+                "table_index": len(all_tables),
+                "headers": [],
+                "rows": legacy_table
+            })
+        all_images.append(img)  # ← FIX: store actual PIL images
 
     return {
-        "text": text,
-        "tables": tables,
-        "images": images,
-        "metadata": metadata # week 4 meta data additional row
+        "text": text_blocks,
+        "tables": all_tables,
+        "images": all_images,
+        "metadata": metadata
     }
-
-
-# Week 5 - add return extracted file file for normalisation step
-from backend.modules.db import get_db, ExtractedContent
-
-def extract_tables(file_id: int):
-    db = next(get_db())
-    record = db.query(ExtractedContent).filter(ExtractedContent.file_id == file_id).first()
-
-    if not record:
-        return None
-
-    try:
-        return json.loads(record.raw_tables)
-    except Exception:
-        return []
-

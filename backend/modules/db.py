@@ -30,9 +30,10 @@
 # modules/db.py
 
 #packages
-from sqlalchemy import create_engine, Column, Integer, String, Text, JSON, DateTime, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, Text, JSON, DateTime, ForeignKey, Float
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from datetime import datetime
+from sqlalchemy.sql import func
 
 
 # SQLAlchemy Base and Engine
@@ -87,8 +88,25 @@ class ExtractedContent(Base):
     extraction_status = Column(String, default="success")
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
+
+# keeping header between batches
+class TableHeader(Base):
+    __tablename__ = "table_headers"
+
+    id = Column(Integer, primary_key=True)
+    file_id = Column(Integer, index=True, nullable=False)
+    table_index = Column(Integer, nullable=False)
+    header = Column(JSON, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+
 # create the resulting tables
 def init_db():
     Base.metadata.create_all(bind=engine)
+
+
+
+
 
 

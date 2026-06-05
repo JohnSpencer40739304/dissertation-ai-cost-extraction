@@ -8,6 +8,136 @@
 ### Module Leader: Dr Mouad Lemoudden
 Dissertation Project 2026 -  to see if AI can be used to extract and extrapolate dispersed supplier cost data from various different formats and incomplete data sets. Telecom products will be the used example.
 
+# Week 8 (v20260528) - Normalisation Fixed with enhanced extraction
+This backend implements a modular, AI‑assisted cost‑extraction and normalisation pipeline designed for heterogeneous commercial documents (Excel, PDF, DOCX, OCR images).
+The architecture is intentionally simple, auditable, and aligned with the dissertation’s goals: traceability, modularity, and progressive refinement.
+
+### 1. High‑Level Architecture Overview
+The system is composed of three independent layers:
+- Extraction Layer — deterministic parsing of Excel/PDF/DOCX + OCR + AI fallback
+- Normalisation Layer — ultra‑light semantic cleaning, matrix explosion, and schema routing
+- Persistence Layer — structured storage of raw extraction, normalised rows, and attributes
+Each layer is isolated, testable, and replaceable.
+
+### 2. Folder Structure (Final)
+Code
+backend/
+  app/
+    main.py                     → FastAPI entrypoint
+    extract.py                  → Extraction router
+
+    ai/
+      client.py                 → OpenAI client wrapper
+      prompt_templates.py       → AI prompt definitions
+
+    services/
+      extraction_service.py     → Deterministic extraction logic
+      normalisation_service.py  → Week‑8 normaliser (active)
+      adapter.py                → Converts extractor output → normaliser schema
+      final_schema.py           → Legacy (kept for reference)
+      memory_store.py           → Legacy (Week‑6/7 batch memory)
+
+    tools/
+      ai_table_extraction.py    → AI fallback for table extraction (active)
+      cleaning.py               → Numeric cleaning utilities (active)
+      currency_tool.py          → Currency inference helpers (active)
+
+  modules/
+    db.py                       → DB session + engine
+    models.py                   → SQLAlchemy ORM models
+Legacy Week‑6/7 modules are preserved for dissertation evidence but not used in the active pipeline.
+
+### 3. Extraction Layer
+Purpose
+Convert arbitrary documents into a unified intermediate representation:
+Code
+{
+  "file_id": ...,
+  "tables": [...],
+  "text": ...,
+  "images": ...
+}
+**Components**
+extraction_service.py
+- Excel parsing (multi‑sheet, header detection)
+- PDF text + OCR image table detection
+- DOCX text, tables, embedded images
+- OCR fallback for images
+- Table reconstruction from OCR text
+ai_table_extraction.py  
+- AI fallback when deterministic extraction fails.
+extract.py  
+- FastAPI router orchestrating extraction and saving results to DB.
+
+Output
+All extraction results are stored in ExtractedContent for reproducibility.
+
+### 4. Normalisation Layer (Week‑8)
+Purpose
+Transform raw extracted tables into a clean, row‑level cost dataset suitable for analysis.
+Key Features
+- Header‑based row mapping
+- Numeric cleaning (clean_numeric)
+- Currency inference
+- AI‑assisted table classification
+- Matrix table explosion
+- Row‑level confidence scoring
+
+Routing into:
+- CleanCostData (core rows)
+- CleanCostDataAttributes (extended attributes)
+
+Components
+- normalisation_service.py  The main Week‑8 normaliser.
+- adapter.py  Ensures extractor output matches the schema expected by the normaliser.
+- Output A unified, normalised dataset stored in two relational tables.
+
+### 5. Persistence Layer
+Models
+- UploadedFile — metadata for uploaded documents
+- ExtractedContent — raw extraction results
+- NormalisedContent — debug storage of Week‑8 normaliser output
+- CleanCostData — core cost rows
+- CleanCostDataAttributes — extended attributes per row
+- BatchMemory / TableHeader — legacy Week‑6/7 memory (kept for reference)
+- Database Engine
+Defined in db.py using SQLAlchemy ORM.
+
+### 6. Legacy Modules (Preserved for Dissertation Evidence)
+These modules represent earlier iterations (Week‑6/7) and are intentionally retained:
+- memory_store.py — batch memory for multi‑pass AI normalisation
+- adaptive_batch_size.py — experimental batch tuning
+- batch_overlap.py — overlapping batch strategy
+- ai_extraction.py — early AI‑first extractor prototype
+- final_schema.py — early schema routing prototype
+- prompt_template_semantic.py — early semantic classifier prompts
+- They are not imported by the active pipeline.
+
+### 7. Execution Flow Summary
+Code
+User uploads file →
+  extract.py →
+    extraction_service.py →
+      (deterministic extraction)
+      OR ai_table_extraction.py (fallback)
+    → ExtractedContent saved
+
+User triggers normalisation →
+  normalisation_service.py →
+    adapter.py (schema alignment)
+    clean_numeric, currency inference
+    AI table classification
+    matrix explosion
+    → CleanCostData + CleanCostDataAttributes saved
+
+### 8. Design Principles
+- Modularity — each layer is isolated and replaceable
+- Auditability — raw extraction and normalised output stored separately
+- Determinism first — AI used only when deterministic methods fail (faster than AI alone)
+- Explainability — minimal AI involvement in Week‑8 normaliser
+- Reproducibility — all intermediate states persisted
+
+
 # Week 7 (v20260522) - Refinements to Normalisation step
 
 The pipeline currently follows these steps:
@@ -46,7 +176,7 @@ Semantic AI currently lacks telecom‑specific glossary rules.
 ###  6. The pipeline assumes “one file = one table”  
 This assumption is incompatible with real telecom pricing documents.
 
-## 📉 Current Behaviour
+## Current Behaviour
 - Simple, single‑table documents may work.
 - Multi‑table Word files produce partial or incorrect results.
 - Multi‑sheet Excel files often return **zero rows**.

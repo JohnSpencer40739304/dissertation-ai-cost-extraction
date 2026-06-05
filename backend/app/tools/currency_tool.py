@@ -94,36 +94,23 @@ class CurrencyTool:
     
     @staticmethod
     def process_table(headers, rows, surrounding_text=""):
-        """
-        Cleans all cells in a table and extracts currency context.
-        Returns:
-            cleaned_rows: list of cleaned rows
-            currency_context: {
-                "cell_level": [...],
-                "header_level": [...],
-                "document_level": "...",
-                "default": "USD"
-            }
-        """
-
+        # cleans each cell in table to remove currency values 
         cleaned_rows = []
         cell_level = []
         header_level = []
         document_level = None
 
-        # 1. Detect currency in headers
+        # 1   Detect currency in headers
         for h in headers:
             _, cur = CurrencyTool.process_cell(h)
             if cur:
                 header_level.append(cur)
-
-        # 2. Detect currency in surrounding text
+        # 2   Detect currency in surraunding text
         if surrounding_text:
             _, cur = CurrencyTool.process_cell(surrounding_text)
             if cur:
                 document_level = cur
-
-        # 3. Clean each row
+        # 3   Clean each row
         for row in rows:
             cleaned_row = []
             for cell in row:

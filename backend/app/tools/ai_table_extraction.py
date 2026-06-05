@@ -5,7 +5,7 @@ client = OpenAI()
 import unicodedata
 import json
 
-# added to handle curly quotes of AI prompts
+# added to handle curly quotes of AI prompts with JSON
 def sanitize_text(text: str) -> str:
     text = unicodedata.normalize("NFKC", text)
     text = text.replace("\u00A0", " ")

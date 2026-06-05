@@ -12,7 +12,7 @@ def get_adaptive_batch_size(total_rows: int) -> int:
         return total_rows
 
     if total_rows <= 200:
-        return 40
+        return 15
 
     batch_size = int(total_rows * 0.05)
     batch_size = max(batch_size, 80)

@@ -1,4 +1,4 @@
-SEMANTIC_PROMPT_TEMPLATE = """
+OLD_SEMANTIC_PROMPT_TEMPLATE = """
 You are a pricing-data semantic normalisation assistant.
 
 Your job is to take a single atomic pricing row and convert it into a clean,
@@ -80,4 +80,98 @@ Rules:
 - If a field cannot be inferred, set it to null.
 - Confidence is a float between 0 and 1.
 - Do not include explanations or commentary.
+"""
+
+SEMANTIC_PROMPT_TEMPLATE = """
+
+You are an AI system that interprets a single structured row extracted from a pricing document.
+
+Your task is to analyse the row and produce a clean, normalised JSON object containing:
+- all meaningful attributes inferred from the row
+- a correctly interpreted unit_price
+- a correctly interpreted currency
+- a confidence score between 0 and 1
+- an "extra" object for any additional useful metadata
+
+The input row has already been structurally normalised:
+- matrix columns have been exploded
+- currency has been enforced
+- header has been stabilised
+- attributes are consistent across batches
+- no hallucinated fields exist
+
+Your job is **semantic interpretation**, not structural extraction.
+
+-------------------------
+INPUT ROW (JSON)
+-------------------------
+{row_json}
+
+=====================================================================
+SEMANTIC INTERPRETATION RULES
+=====================================================================
+
+### 1. ATTRIBUTE INTERPRETATION (INDUSTRY-AGNOSTIC)
+Interpret the meaning of each attribute based on:
+- header names
+- cell values
+- patterns
+- domain cues (e.g., SKU, grade, size, tier, product name, region, etc.)
+
+Examples of valid attributes (NOT exhaustive):
+- product, sku, model, material, grade, size, tier, region, country
+- quantity, unit, rating, capacity, speed, duration
+- vendor, category, service, description
+- any domain-specific attribute present in the row
+
+Do NOT invent attributes that are not supported by the input.
+
+### 2. PRICE INTERPRETATION
+- The row contains exactly one price point.
+- Convert the price into a numeric "unit_price" field.
+- Preserve the currency already assigned in the row.
+- If the price cannot be interpreted, set unit_price = null.
+
+### 3. CONFIDENCE SCORING
+- confidence MUST be a float between 0 and 1.
+- Higher confidence = more certain interpretation.
+- Use lower confidence when the meaning of attributes is unclear.
+
+### 4. EXTRA METADATA
+Place any additional useful information in:
+{{
+  "extra": {{
+      "notes": "...",
+      "raw_values": {{...}},
+      "inferred_type": "...",
+      ...
+  }}
+}}
+
+### 5. NO HALLUCINATIONS
+- Never invent products, SKUs, vendors, or attributes.
+- Never infer values not supported by the input.
+- If something is unclear, set it to null or place it in "extra".
+
+=====================================================================
+STRICT JSON OUTPUT FORMAT
+=====================================================================
+
+Return ONLY this JSON object:
+
+{{
+  "unit_price": ...,
+  "currency": "...",
+  "confidence": 0.0,
+  "extra": {{...}},
+
+  "<dynamic_attribute_1>": "...",
+  "<dynamic_attribute_2>": "...",
+  ...
+}}
+
+- Do NOT wrap in code fences.
+- Do NOT include comments.
+- Do NOT include trailing commas.
+- Do NOT output nested objects except inside "extra".
 """
