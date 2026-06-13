@@ -32,6 +32,8 @@ Each layer is isolated, testable, and replaceable.
 
 ### 2. Folder Structure
 Code
+
+```
 backend/
   app/
     main.py                     → FastAPI entrypoint - Week 9 modified for to serve excel client
@@ -57,13 +59,14 @@ backend/
   modules/
     db.py                       → DB session + engine
     models.py                   → SQLAlchemy ORM models
-    
+
 client/
-    excel-addin/
-        deltic-excel-addin/     → Office.js Excel add-in
-            src/taskpane/       → Main UI logic
-            manifest.xml        → Add-in manifest
-            node_modules/       → Ignored by Git
+  excel-addin/
+    deltic-excel-addin/     → Office.js Excel add-in
+      src/taskpane/       → Main UI logic
+      manifest.xml        → Add-in manifest
+      node_modules/       → Ignored by Git
+```
 
 Legacy Week‑6/7 modules are preserved for dissertation evidence but not used in the active pipeline.
 
@@ -167,6 +170,8 @@ Each layer is isolated, testable, and replaceable.
 
 ### 2. Folder Structure (Final)
 Code
+
+```
 backend/
   app/
     main.py                     → FastAPI entrypoint
@@ -191,6 +196,7 @@ backend/
   modules/
     db.py                       → DB session + engine
     models.py                   → SQLAlchemy ORM models
+```
 
 Legacy Week‑6/7 modules are preserved for dissertation evidence but not used in the active pipeline.
 
