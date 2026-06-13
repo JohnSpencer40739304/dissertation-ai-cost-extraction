@@ -36,9 +36,11 @@ backend/
   app/
     main.py                     → FastAPI entrypoint - Week 9 modified for to serve excel client
     extract.py                  → Extraction router
+
     ai/
       client.py                 → OpenAI client wrapper
       prompt_templates.py       → AI prompt definitions
+
     services/
       extraction_service.py     → Deterministic extraction logic
       normalisation_service.py  → Week‑8 normaliser (active)
@@ -46,19 +48,23 @@ backend/
       corrections.py            → NEW Week 9 - Processes data corrections sent from excel client
       final_schema.py           → Legacy (kept for reference)
       memory_store.py           → Legacy (Week‑6/7 batch memory)
+
     tools/
       ai_table_extraction.py    → AI fallback for table extraction (active)
       cleaning.py               → Numeric cleaning utilities (active)
       currency_tool.py          → Currency inference helpers (active)
+
   modules/
     db.py                       → DB session + engine
     models.py                   → SQLAlchemy ORM models
+    
 client/
     excel-addin/
         deltic-excel-addin/     → Office.js Excel add-in
             src/taskpane/       → Main UI logic
             manifest.xml        → Add-in manifest
             node_modules/       → Ignored by Git
+
 Legacy Week‑6/7 modules are preserved for dissertation evidence but not used in the active pipeline.
 
 ### 3. Features
@@ -185,6 +191,7 @@ backend/
   modules/
     db.py                       → DB session + engine
     models.py                   → SQLAlchemy ORM models
+
 Legacy Week‑6/7 modules are preserved for dissertation evidence but not used in the active pipeline.
 
 ### 3. Extraction Layer
