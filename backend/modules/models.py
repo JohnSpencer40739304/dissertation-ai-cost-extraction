@@ -189,3 +189,33 @@ class CleanCostData(Base):
     source_format = Column(String)
     page_number = Column(Integer)
 """
+
+class CleanCostDataCorrectionsCore(Base):
+    __tablename__ = "clean_cost_data_corrections_core"
+
+    id = Column(Integer, primary_key=True, index=True)
+    source_row_id = Column(Integer, ForeignKey("clean_cost_data.id"), nullable=False, index=True)
+    file_id = Column(Integer, nullable=False, index=True)
+    field_name = Column(String, nullable=False)
+    old_value = Column(JSONB, nullable=True)
+    new_value = Column(JSONB, nullable=True)
+    user_id = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    parent = relationship("CleanCostData")
+
+
+class CleanCostDataCorrectionsAttributes(Base):
+    __tablename__ = "clean_cost_data_corrections_attributes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    source_row_id = Column(Integer, ForeignKey("clean_cost_data.id"), nullable=False, index=True)
+    file_id = Column(Integer, nullable=False, index=True)
+    attribute_name = Column(String, nullable=False)
+    old_value = Column(JSONB, nullable=True)
+    new_value = Column(JSONB, nullable=True)
+    user_id = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    parent = relationship("CleanCostData")
+

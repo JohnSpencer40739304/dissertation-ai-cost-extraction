@@ -230,8 +230,96 @@ async def normalise_file(file_id: int):
 app.include_router(extract_router)
 app.include_router(router)
 
+#Week 9 addition
+from backend.app import corrections
+app.include_router(corrections.router)
 
 
+#week 9 - send cost data to excel basd on file id:
+from fastapi import HTTPException
+from backend.modules.db import SessionLocal
+from backend.modules.models import CleanCostData, CleanCostDataAttributes
 
+@app.get("/file/{file_id}/data")
+def get_clean_data(file_id: int):
+    db = SessionLocal()
 
+    rows = db.query(CleanCostData).filter(CleanCostData.file_id == file_id).all()
+    if not rows:
+        raise HTTPException(status_code=404, detail="No clean_cost_data found for this file_id")
 
+    attrs = (
+        db.query(CleanCostDataAttributes)
+        .filter(CleanCostDataAttributes.cost_item_id.in_([r.id for r in rows]))
+        .all()
+    )
+
+    clean_data = [
+        [
+            "id",
+            "file_id",
+            "sheet_name",
+            "table_index",
+            "row_index",
+            "item_description",
+            "unit_price",
+            "currency",
+            "quantity",
+            "ai_confidence_overall"
+        ]
+    ] + [
+        [
+            r.id,
+            r.file_id,
+            r.sheet_name,
+            r.table_index,
+            r.row_index,
+            r.item_description,
+            r.unit_price,
+            r.currency,
+            r.quantity,
+            r.ai_confidence_overall
+        ]
+        for r in rows
+    ]
+
+    clean_attrs = [
+        [
+            "id",
+            "cost_item_id",
+            "attribute_name",
+            "attribute_value",
+            "extraction_method",
+            "confidence_score"
+        ]
+    ] + [
+        [
+            a.id,
+            a.cost_item_id,
+            a.attribute_name,
+            a.attribute_value,
+            a.extraction_method,
+            a.confidence_score
+        ]
+        for a in attrs
+    ]
+
+    return {
+        "clean_cost_data": clean_data,
+        "clean_cost_data_attributes": clean_attrs
+    }
+
+#week 9 - send a list of already loaded files to the plug-in
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from backend.modules.db import SessionLocal
+from backend.modules.db import UploadedFile
+
+@app.get("/files")
+def list_files():
+    db = SessionLocal()
+    files = db.query(UploadedFile).all()
+    return [
+        {"id": f.id, "name": f.filename}
+        for f in files
+    ]

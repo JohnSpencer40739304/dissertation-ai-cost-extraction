@@ -8,6 +8,146 @@
 ### Module Leader: Dr Mouad Lemoudden
 Dissertation Project 2026 -  to see if AI can be used to extract and extrapolate dispersed supplier cost data from various different formats and incomplete data sets. Telecom products will be the used example.
 
+
+# Week 9 (v20260608) - Building the Excel Client
+The client is an excel plugin built using a modern javascript and HTML front end calling the backend developed in previous weeks.
+
+### 1. High‑Level Architecture Overview
+Backend:
+- Extraction Layer — deterministic parsing of Excel/PDF/DOCX + OCR + AI fallback
+- Normalisation Layer — ultra‑light semantic cleaning, matrix explosion, and schema routing
+- Persistence Layer — structured storage of raw extraction, normalised rows, and attributes
+- NEW for week 9 - data correction scripts to record user modifications made in excel
+Front End (new for week 9):
+- Excel Client add-in - installation package needs to built but see below for method
+- Button to select a file to be sent off for extraction and normalisation via the backend
+- drop down list to select previous file already extracted that resides in the back end
+- The above loads data into 3 sheets:
+    - CleanCostData - key costing data - cannot be edited
+    - CleanCostDataAttributes - Extended data table conatining all attributes  - cannot be edited
+    - JoinedCostData - that merges the tables above and repivots the attribute rows into columns
+- A user correction facility, user can make corrections in JoinedCostData and send corrections to the backend
+- A table drop down list that allows user to select and see one table at a time in JoinedCostData when source file has multiple tables
+Each layer is isolated, testable, and replaceable.
+
+### 2. Folder Structure
+Code
+backend/
+  app/
+    main.py                     → FastAPI entrypoint - Week 9 modified for to serve excel client
+    extract.py                  → Extraction router
+    ai/
+      client.py                 → OpenAI client wrapper
+      prompt_templates.py       → AI prompt definitions
+    services/
+      extraction_service.py     → Deterministic extraction logic
+      normalisation_service.py  → Week‑8 normaliser (active)
+      adapter.py                → Converts extractor output → normaliser schema
+      corrections.py            → NEW Week 9 - Processes data corrections sent from excel client
+      final_schema.py           → Legacy (kept for reference)
+      memory_store.py           → Legacy (Week‑6/7 batch memory)
+    tools/
+      ai_table_extraction.py    → AI fallback for table extraction (active)
+      cleaning.py               → Numeric cleaning utilities (active)
+      currency_tool.py          → Currency inference helpers (active)
+  modules/
+    db.py                       → DB session + engine
+    models.py                   → SQLAlchemy ORM models
+client/
+    excel-addin/
+        deltic-excel-addin/     → Office.js Excel add-in
+            src/taskpane/       → Main UI logic
+            manifest.xml        → Add-in manifest
+            node_modules/       → Ignored by Git
+Legacy Week‑6/7 modules are preserved for dissertation evidence but not used in the active pipeline.
+
+### 3. Features
+Backend
+- Upload any file (PDF, DOCX, XLSX)
+- AI‑assisted extraction of cost tables
+- Normalisation into a unified schema:
+- clean_cost_data
+- clean_cost_data_attributes
+- PostgreSQL persistence
+- Correction ingestion API
+- File history & re‑load support
+Client (Excel Add‑in)
+- Load any processed file from the backend
+- View clean cost data and attributes
+- Auto‑build a joined table for correction
+- Select individual tables via dropdown
+- Lock core fields, allow user edits on others
+- Send corrections back to backend
+- Full pipeline automation: Upload → Extract → Normalise → Load → Join → correct → reload
+
+### 4.  Pipeline Overview
+1. Upload
+User selects a file in Excel → sent to backend.
+2. Extract
+Backend parses the document into raw tables.
+3. Normalise
+AI + rule‑based engine converts raw tables into structured cost data.
+4. Load
+Excel add‑in fetches the final clean tables from the backend.
+5. Join
+Attributes are merged into the main table for correction.
+6. Correction
+User edits unlocked fields → corrections sent to backend.
+7. Extrapolation (coming next)
+AI‑assisted cost prediction based on corrected data.
+
+### 5. Corrections Engine 
+The Excel add‑in builds a joined table with:
+- Core fields (locked)
+- Attribute fields (editable)
+- User‑added columns (ignored)
+- Row‑level IDs for backend updates
+Corrections are sent as structured JSON:
+{
+  "source_row_id": 123,
+  "file_id": 82,
+  "field_type": "core",
+  "field_name": "unit_price",
+  "old_value": "12.50",
+  "new_value": "14.00",
+  "user": "excel_user"
+}
+
+### 6. Database Setup
+Install PostgreSQL 14+ from https://www.postgresql.org/download/
+Create the database:
+createdb cost_dissertation_db
+
+PostgreSQL instance is local and stored here: C:\Program Files\PostgreSQL\<version>\data\
+Host: localhost
+Port: 5432
+Database: cost_dissertation_db
+User: postgres
+
+Run the backend:
+uvicorn main:app --reload
+
+### 7. Backend Setup via Command Prompt
+Create a virtual environment:
+python -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
+
+cd backend
+pip install -r requirements.txt
+uvicorn main:app --reload
+
+Running on local host: http://localhost:8000
+
+### 8. Client Excel setup via Powershell
+cd client/excel-addin/deltic-excel-addin
+npm install
+npm start
+
+Then sideload the excel manifest into Add-Ins.
+
+NEXT STEP - Data Extrapolation Tools....
+
+
 # Week 8 (v20260528) - Normalisation Fixed with enhanced extraction
 This backend implements a modular, AI‑assisted cost‑extraction and normalisation pipeline designed for heterogeneous commercial documents (Excel, PDF, DOCX, OCR images).
 The architecture is intentionally simple, auditable, and aligned with the dissertation’s goals: traceability, modularity, and progressive refinement.
