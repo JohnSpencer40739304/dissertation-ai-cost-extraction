@@ -20,7 +20,7 @@ module.exports = async (env, options) => {
 
     entry: {
       polyfill: ["core-js/stable", "regenerator-runtime/runtime"],
-      taskpane: ["./src/taskpane/taskpane.js", "./src/taskpane/taskpane.html"],
+      taskpane: "./src/taskpane/taskpane.js",
       commands: "./src/commands/commands.js",
     },
 
@@ -90,7 +90,14 @@ module.exports = async (env, options) => {
       }),
     ],
 
+
     devServer: {
+      hot: false,
+      liveReload: false,
+      client: false,
+      devMiddleware: {
+        writeToDisk: true
+      },
       headers: {
         "Access-Control-Allow-Origin": "*",
       },
@@ -102,7 +109,8 @@ module.exports = async (env, options) => {
             : await getHttpsOptions(),
       },
       port: process.env.npm_package_config_dev_server_port || 3000,
-    },
+    }
+
   };
 
   return config;

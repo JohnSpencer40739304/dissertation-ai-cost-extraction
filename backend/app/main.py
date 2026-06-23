@@ -5,12 +5,14 @@ from pydantic import BaseModel
 from datetime import datetime
 import os
 
+
 #from backend.modules.db import init_db
 from backend.modules.db import init_db, SessionLocal
 from backend.app.extract import router as extract_router
 #from backend.app.services.extraction_service import extract_raw_content
 from backend.app.services.normalisation_service import NormalisationService
 from backend.app.services.adapter import adapt_unified_extractor_output
+
 
 # Week 1 - Imports
 #from fastapi import FastAPI
@@ -31,7 +33,14 @@ from backend.app.services.adapter import adapt_unified_extractor_output
 #from backend.modules.db import init_db
 
 
+# Week 10 - adding router for AI extrapolation
+#from backend.app.ai.extrapolation_router import runExtrapolationAI
+from backend.app.copilot_router import router as copilot_router
+from backend.app.extrapolation_router import router as extrapolation_router
 
+# Database models
+from backend.modules.db import UploadedFile, ExtractedContent
+from backend.modules.models import CleanCostData, CleanCostDataAttributes
 
 
 # Week 1 - main body code
@@ -39,19 +48,41 @@ from backend.app.services.adapter import adapt_unified_extractor_output
 #    category: str
 #    amount: float
 #    year: int
+
+
 app = FastAPI()
-init_db()
+# init_db() week 10 moved below
 
 
 # CORS configuration which allows for a smoother API backend in fastAPI
-origins = ["*"]
+#origins = ["*"]
+#app.add_middleware(
+#    CORSMiddleware,
+    #allow_origins=origins,
+    #allow_origins=["https://localhost:3000", "https://127.0.0.1:3000"],
+    #allow_origins=["*"],
+#    allow_credentials=True,
+#    allow_methods=["*"],
+#    allow_headers=["*"],
+#)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=[
+        "https://localhost:3000",
+        "http://localhost:3000",
+        "https://127.0.0.1:3000",
+        "http://127.0.0.1:3000",
+        "https://localhost",
+        "http://localhost"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+init_db()
 
 
 UPLOAD_DIR = "uploads"
@@ -193,12 +224,18 @@ async def upload_file(file: UploadFile = File(...)):
 #    normalisation_service.save_to_normalised_content(file_id, ai_output)
 
 
+
 #  WEEK 8 ADDITION: register the normalisation router
-router = APIRouter()
 
 from backend.modules.db import ExtractedContent
 
-@router.post("/normalise/{file_id}")
+
+#router = APIRouter()
+normalisation_router = APIRouter()
+
+
+#@router.post("/normalise/{file_id}")
+@normalisation_router.post("/normalise/{file_id}")
 async def normalise_file(file_id: int):
     db = SessionLocal()
 
@@ -226,9 +263,8 @@ async def normalise_file(file_id: int):
     }
 
 
-# record the routers
-app.include_router(extract_router)
-app.include_router(router)
+
+
 
 #Week 9 addition
 from backend.app import corrections
@@ -323,3 +359,27 @@ def list_files():
         {"id": f.id, "name": f.filename}
         for f in files
     ]
+
+# Week 10 - router endpoint for AI extrapolation 
+# First attempt using AI only that exploded token counts
+#@app.post("/extrapolation/run")
+#async def extrapolation_run(payload: dict):
+#    try:
+#        result = await runExtrapolationAI(payload)
+#        return result
+#    except Exception as e:
+#        print("Extrapolation error:", e)
+#        return {"error": str(e)}
+
+# ---------------------------------------------------------
+# Register routers 
+app.include_router(extract_router)
+app.include_router(normalisation_router)
+from backend.app import corrections
+app.include_router(corrections.router)
+
+# Week 10 AI routers
+app.include_router(copilot_router, prefix="/copilot")
+app.include_router(extrapolation_router, prefix="/analysis")
+
+

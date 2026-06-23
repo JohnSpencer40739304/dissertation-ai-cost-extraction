@@ -1,3 +1,8 @@
+if (window.__DELTIC_TASKPANE_INITIALIZED__) {
+    console.log("Taskpane already initialized — skipping duplicate instance");
+} else {
+    window.__DELTIC_TASKPANE_INITIALIZED__ = true;
+}
 
 /*
  * Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT license.
@@ -100,22 +105,87 @@ async function run() {
 }
 */
 
-/* global Office, Excel, console, document */
+import { populateExtrapolationBlock }
+  from "../excel/populateExtrapolationBlock";
 
-/* -----------------------------------------
-   Week 9 - new initiation  */
+window.pendingExtrapolation = null;
 
-Office.onReady(async (info) => {
+let chatHistory = [];
+
+function showTab(tabId) {
+    document.querySelectorAll(".tab-panel")
+        .forEach(p => p.style.display = "none");
+
+    document.getElementById(tabId).style.display = "block";
+
+    if (tabId === "week9-panel") bindWeek9();
+    if (tabId === "week10-panel") bindWeek10();
+}
+
+function setupTabs() {
+    document.querySelectorAll(".tab-button").forEach(btn => {
+        btn.onclick = () => showTab(btn.dataset.tab);
+    });
+}
+
+
+function bindWeek10() {
+    console.log("Week 10 active");
+
+    const sendBtn = document.getElementById("sendBtn");
+
+    // Replace ALL previous handlers
+    sendBtn.onclick = onSendMessage;
+
+    console.log("Week 10 handler bound");
+}
+
+
+function bindWeek9() {
+    console.log("Week 9 active");
+
+    const sendBtn = document.getElementById("sendBtn");
+
+    // Remove Week 10 handler
+    sendBtn.onclick = null;
+
+    // Bind Week 9-specific buttons
+    document.getElementById("send-corrections-btn").onclick = sendCorrections;
+
+    populateFileDropdown();
+    document.getElementById("load-file").onclick = loadSelectedFile;
+
+    /*processFileBtn.onclick = () => {
+        console.log("Process File clicked — opening file picker");
+        hiddenFileInput.click();
+    };*/
+
+    hiddenFileInput.onchange = async () => {
+        const file = hiddenFileInput.files[0];
+        if (!file) return;
+        console.log("User selected file:", file.name);
+        await processUploadedFile(file);
+    };
+
+    tableSelect.onchange = () => {
+        console.log("Auto-refresh: table_index changed to", tableSelect.value);
+        loadSelectedTableOnly();
+    };
+}
+
+
+Office.onReady(async () => {
+    console.log("TASKPANE READY");
+
     document.getElementById("sideload-msg").style.display = "none";
     document.getElementById("app-body").style.display = "block";
-    document.getElementById("send-corrections-btn")
-    .addEventListener("click", sendCorrections);
 
-    if (info.host === Office.HostType.Excel) {
-        await populateFileDropdown();
-        document.getElementById("load-file").onclick = loadSelectedFile;
-    }
+    setupTabs();
+    showTab("week9-panel"); // default
 });
+
+
+
 
 // week  9 - added for select table list
 const tableSelect = document.getElementById("table-select");
@@ -134,13 +204,11 @@ tableSelect.addEventListener("change", () => {
 const processFileBtn = document.getElementById("process-file-btn");
 const hiddenFileInput = document.getElementById("hidden-file-input");
 
-// When user clicks "Process File", open the file picker
+// When user clicks "Process File" this will open the file picker and send it for extraction
 processFileBtn.addEventListener("click", () => {
     console.log("Process File clicked — opening file picker");
     hiddenFileInput.click();
 });
-
-// When user selects a file, run the full pipeline
 hiddenFileInput.addEventListener("change", async () => {
     const file = hiddenFileInput.files[0];
     if (!file) {
@@ -148,9 +216,8 @@ hiddenFileInput.addEventListener("change", async () => {
         return;
     }
     console.log("User selected file:", file.name);
-    await processUploadedFile(file);   // <-- THIS MUST FIRE
+    await processUploadedFile(file); 
 });
-
 // Egg timer cursur while running
 //function showBusyCursor() {
     //document.body.style.cursor = "wait";
@@ -167,6 +234,42 @@ function hideBusyOverlay() {
 }
 
 
+async function processUploadedFile(file) {
+    //showBusyCursor();
+    showBusyOverlay();
+    console.log("Pipeline started");
+    try {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const uploadResp = await fetch("http://localhost:8000/upload-file", {
+            method: "POST",
+            body: formData
+        });
+        const uploadData = await uploadResp.json();
+        const fileId = uploadData.file_id;
+        console.log("Uploaded file_id:", fileId);
+        await fetch(`http://localhost:8000/extract-file/${fileId}`, { method: "POST" });
+        await fetch(`http://localhost:8000/normalise/${fileId}`, { method: "POST" });
+        console.log("Triggering existing load pipeline for file:", fileId);
+        await loadSelectedFileById(fileId);
+        console.log("Pipeline complete");
+
+    } catch (err) {
+        console.error("Pipeline failed:", err);
+    } finally {
+        //hideBusyCursor();
+        hideBusyOverlay();
+    }
+}
+
+
+async function loadSelectedFileById(fileId) {
+    await populateFileDropdown();
+    document.getElementById("file-select").value =
+        String(fileId);
+    await loadSelectedFile();
+}
 
 // -------------------------------------
 // Week 9 - Correction engine configuration
@@ -190,33 +293,68 @@ let ORIGINAL_HEADERS = [];
 // ------------------------------
 
 
-async function populateFileDropdown() {
-  const dropdown = document.getElementById("file-select");
 
-  try {
-    const response = await fetch("http://localhost:8000/files");
-    const files = await response.json();
+function storeOriginalJoinedData(expandedTable) {
+  ORIGINAL_HEADERS = expandedTable[0];
 
-    dropdown.innerHTML = ""; // clear "Loading..."
+  for (let i = 1; i < expandedTable.length; i++) {
+    const row = expandedTable[i];
+    const id = row[0]; // cost_item_id
+    ORIGINAL_JOINED_DATA[id] = {};
 
-    files.forEach(file => {
-      const option = document.createElement("option");
-      option.value = file.id;
-      option.textContent = `${file.id} — ${file.name}`;
-      dropdown.appendChild(option);
+    ORIGINAL_HEADERS.forEach((header, colIndex) => {
+      ORIGINAL_JOINED_DATA[id][header] = row[colIndex];
     });
-
-  } catch (err) {
-    console.error("Error loading file list:", err);
-    dropdown.innerHTML = "<option>Error loading files</option>";
   }
+}
+
+function buildExpandedTable(costData, attributes) {
+  // Extract headers from costData
+  const costHeaders = costData[0];
+
+  // Build a map: cost_item_id → { attribute_name: attribute_value }
+  const attrMap = {};
+
+  for (const row of attributes.slice(1)) { // skip header
+    const [id, costItemId, attributeName, attributeValue] = row;
+    if (!attrMap[costItemId]) {
+      attrMap[costItemId] = {};
+    }
+    attrMap[costItemId][attributeName] = attributeValue;
+  }
+
+  // Collect all unique attribute names
+  const attributeNames = new Set();
+  for (const row of attributes.slice(1)) {
+    attributeNames.add(row[2]); // attribute_name
+  }
+
+  const attributeHeaders = Array.from(attributeNames);
+
+  // Build final header row
+  const finalHeaders = [...costHeaders, ...attributeHeaders];
+
+  // Build final rows
+  const finalRows = [finalHeaders];
+  for (const row of costData.slice(1)) { // skip header
+    const costItemId = row[0]; // id column
+    const attrValues = attrMap[costItemId] || {};
+    const expandedRow = [
+      ...row,
+      ...attributeHeaders.map(name => attrValues[name] || "")
+    ];
+    finalRows.push(expandedRow);
+  }
+
+  return finalRows;
 }
 
 
 
-
 async function loadSelectedFile() {
+  chatHistory = [];  // ensures backend sees no old context
   const fileId = document.getElementById("file-select").value;
+  window.currentFileId = fileId; // Week 10 additional line
   if (!fileId) {
     console.warn("No file selected");
     return;
@@ -291,6 +429,8 @@ async function loadSelectedFile() {
     //await writeTableToExcel(expanded, "JoinedCostData"); // 1 line replaced by 2 below
     storeOriginalJoinedData(expanded);
     await writeTableToExcel(expanded, "JoinedCostData", { selectiveLocking: true });
+
+    resetConversationState();
   } catch (err) {
     console.error("Error loading file:", err);
   }
@@ -426,6 +566,7 @@ async function sendCorrections() {
     const sheet = context.workbook.worksheets.getItem("JoinedCostData");
     const usedRange = sheet.getUsedRange();
     usedRange.load("values");
+
     await context.sync();
     const rows = usedRange.values;
     const headers = rows[0];
@@ -494,98 +635,509 @@ async function sendCorrections() {
 
 
 
-function storeOriginalJoinedData(expandedTable) {
-  ORIGINAL_HEADERS = expandedTable[0];
 
-  for (let i = 1; i < expandedTable.length; i++) {
-    const row = expandedTable[i];
-    const id = row[0]; // cost_item_id
-    ORIGINAL_JOINED_DATA[id] = {};
 
-    ORIGINAL_HEADERS.forEach((header, colIndex) => {
-      ORIGINAL_JOINED_DATA[id][header] = row[colIndex];
+
+
+// WEEK 10
+
+// Week 10 - extrapolation
+//import { populateExtrapolationBlock } from "../excel/populateExtrapolationBlock.js";
+//-----------------
+
+
+async function populateFileDropdown() {
+  const dropdown = document.getElementById("file-select");
+
+  try {
+    const response = await fetch("http://localhost:8000/files");
+    const files = await response.json();
+
+    dropdown.innerHTML = ""; // clear "Loading..."
+
+    files.forEach(file => {
+      const option = document.createElement("option");
+      option.value = file.id;
+      option.textContent = `${file.id} — ${file.name}`;
+      dropdown.appendChild(option);
     });
+
+  } catch (err) {
+    console.error("Error loading file list:", err);
+    dropdown.innerHTML = "<option>Error loading files</option>";
   }
 }
 
+// WEEK 10
+// =========================
+// Chat UI helpers
 
-function buildExpandedTable(costData, attributes) {
-  // Extract headers from costData
-  const costHeaders = costData[0];
+/*function appendMessage(sender, text) {
+  const box = document.getElementById("messages");
+  const div = document.createElement("div");
+  div.textContent = sender + ": " + text;
+  div.style.marginBottom = "6px";
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}*/
 
-  // Build a map: cost_item_id → { attribute_name: attribute_value }
-  const attrMap = {};
+function appendMessage(sender, text) {
+  const box = document.getElementById("messages");
+  const div = document.createElement("div");
 
-  for (const row of attributes.slice(1)) { // skip header
-    const [id, costItemId, attributeName, attributeValue] = row;
-    if (!attrMap[costItemId]) {
-      attrMap[costItemId] = {};
+  // Force text to be a string
+  let safeText = "";
+
+  if (typeof text === "string") {
+    safeText = text;
+  } else if (text && typeof text === "object") {
+    safeText = JSON.stringify(text, null, 2);
+  } else {
+    safeText = String(text);
+  }
+
+  div.textContent = sender + ": " + safeText;
+  div.style.marginBottom = "6px";
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+
+// =================================================
+// REDUNDENT  Excel helpers to select and send back fields
+async function readSelection() {
+  return Excel.run(async (context) => {
+    const sheet = context.workbook.worksheets.getItem("JoinedCostData");
+    const usedRange = sheet.getUsedRange();
+    usedRange.load("values, address");
+    await context.sync();
+    return {
+      address: usedRange.address,
+      values: usedRange.values
+    };
+  });
+}
+
+async function getHeaders() {
+  return Excel.run(async (context) => {
+    const sheet = context.workbook.worksheets.getItem("JoinedCostData");
+    const usedRange = sheet.getUsedRange();
+    usedRange.load("values");
+    await context.sync();
+    const values = usedRange.values;
+    if (!values || values.length === 0) {
+      throw new Error("JoinedCostData is empty.");
     }
-    attrMap[costItemId][attributeName] = attributeValue;
-  }
+    return values[0]; // first row = headers
+  });
+}
 
-  // Collect all unique attribute names
-  const attributeNames = new Set();
-  for (const row of attributes.slice(1)) {
-    attributeNames.add(row[2]); // attribute_name
-  }
+async function readFields(fields) {
+  return Excel.run(async context => {
+    const sheet = context.workbook.worksheets.getActiveWorksheet();
+    const table = sheet.tables.getItemAt(0);
+    const result = {};
+    for (const field of fields) {
+      const col = table.columns.getItem(field).getDataBodyRange();
+      col.load("values");
+    }
+    await context.sync();
+    for (const field of fields) {
+      const col = table.columns.getItem(field).getDataBodyRange();
+      result[field] = col.values.flat();
+    }
+    return result;
+  });
+}
 
-  const attributeHeaders = Array.from(attributeNames);
-  // Build final header row
-  const finalHeaders = [...costHeaders, ...attributeHeaders];
-  // Build final rows
-  const finalRows = [finalHeaders];
-  for (const row of costData.slice(1)) { // skip header
-    const costItemId = row[0]; // id column
-    const attrValues = attrMap[costItemId] || {};
-    const expandedRow = [
-      ...row,
-      ...attributeHeaders.map(name => attrValues[name] || "")
-    ];
-    finalRows.push(expandedRow);
-  }
-  return finalRows;
+// ====================================
+// REDUNDENT Analysis call - initial idea to send all the excel data to the backend for analysis
+// replaced by reading data in the backend directly
+
+async function sendToAnalysis(instruction) {
+  const fieldData = await readFields(instruction.fields);
+
+  //const res = await fetch("http://127.0.0.1:8000/analysis/run", {
+  const res = await fetch("http://127.0.0.1:8000/copilot/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      method: instruction.method,
+      fields: instruction.fields,
+      data: fieldData
+    })
+  });
+
+  const result = await res.json();
+  appendMessage("System", "Analysis complete: " + (result.result?.message || JSON.stringify(result)));
 }
 
 
-async function processUploadedFile(file) {
-    //showBusyCursor();
-    showBusyOverlay();
-    console.log("Pipeline started");
+
+// =================================
+// DelticAI chat handler 
+async function onSendMessage() {
+    console.log("NEW ONSENDMESSAGE MULTI-TURN");
+    // Always read the user input FIRST
+    const input = document.getElementById("userInput");
+    const text = input.value.trim();
+    if (!text) return;
+    // ------------------------------------------------------------
+    // 1. Handle YES/NO confirmation for extrapolation
+    if (window.pendingExtrapolation) {
+        const answer = text.toLowerCase();
+
+        /*if (answer === "yes" || answer === "y") {
+            appendMessage("DelticAI", "Running extrapolation…");
+            runExtrapolationScenario(window.pendingExtrapolation);
+            window.pendingExtrapolation = null;
+            return;
+        }*/
+        if (answer === "yes" || answer === "y") {
+
+            appendMessage("You", text);
+            chatHistory.push({
+                role: "user",
+                content: text
+            });
+            input.value = "";
+
+            appendMessage("DelticAI","Running extrapolation...");
+            await runExtrapolationScenario(window.pendingExtrapolation);
+            window.pendingExtrapolation = null;
+            return;
+        }
+
+        /*if (answer === "no" || answer === "n") {
+            appendMessage("DelticAI", "Okay, I won't run it.");
+            window.pendingExtrapolation = null;
+            return;
+        }*/
+        if (answer === "yes" || answer === "y") {
+
+            appendMessage("You", text);
+            chatHistory.push({
+                role: "user",
+                content: text
+            });
+            input.value = "";
+
+            appendMessage("DelticAI","Running extrapolation...");
+            window.pendingExtrapolation = null;
+            return;
+        }
+        appendMessage("DelticAI", "Please answer yes or no.");
+        return;
+    }
+
+    // ------------------------------------------------------------
+    // 2. Normal chat flow
+    // Add user message to UI
+    appendMessage("You", text);
+    // Add to chat history
+    chatHistory.push({ role: "user", content: text });
+    // Clear input
+    input.value = "";
+
+    // Ensure file_id exists
+    if (!window.currentFileId) {
+        appendMessage("System", "No file loaded. Please load a dataset first.");
+        return;
+    }
     try {
-        const formData = new FormData();
-        formData.append("file", file);
-
-        const uploadResp = await fetch("http://localhost:8000/upload-file", {
+        const res = await fetch("http://127.0.0.1:8000/copilot", {
             method: "POST",
-            body: formData
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                history: chatHistory,
+                message: text,
+                file_id: window.currentFileId
+            })
         });
-        const uploadData = await uploadResp.json();
-        const fileId = uploadData.file_id;
-        console.log("Uploaded file_id:", fileId);
-        await fetch(`http://localhost:8000/extract-file/${fileId}`, { method: "POST" });
-        await fetch(`http://localhost:8000/normalise/${fileId}`, { method: "POST" });
-        console.log("Triggering existing load pipeline for file:", fileId);
-        await loadSelectedFileById(fileId);
-        console.log("Pipeline complete");
 
-    } catch (err) {
-        console.error("Pipeline failed:", err);
-    } finally {
-        //hideBusyCursor();
-        hideBusyOverlay();
+        const data = await res.json();
+
+        // Extract natural-language reply safely
+        let replyText = data.reply || "(No reply)";
+
+        // If backend accidentally double-encoded JSON
+        try {
+            const parsed = JSON.parse(replyText);
+            replyText = parsed.reply || replyText;
+        } catch (_) {}
+
+        // Show AI assistant reply and add to chat history 
+        appendMessage("DelticAI", replyText);
+        chatHistory.push({ role: "assistant", content: replyText });
+        // Detect extrapolation intent
+        /*if (data.action === "extrapolate") {
+            askForExtrapolationConfirmation(data);
+        }*/
+
+        if (data.action === "extrapolate") {
+            askForExtrapolationConfirmation({
+                action: data.action,
+                target: data.target,
+                attribute: data.attribute,
+                group_field: data.group_field
+            });
+        }
+    } catch (e) {
+        appendMessage("System", "Backend unreachable: " + e.message);
     }
 }
 
 
-async function loadSelectedFileById(fileId) {
-    // Refresh the dropdown so the new file appears
-    await populateFileDropdown();
+/*function askForExtrapolationConfirmation(instruction) {
+    appendMessage(
+        "DelticAI",
+        "I can run the extrapolation now. Would you like me to proceed? (yes/no)"
+    );
 
-    // Select the new file
-    document.getElementById("file-select").value = fileId;
+    // Store pending instruction
+    //window.pendingExtrapolation = instruction;
+    window.pendingExtrapolation = {
+      action: instruction.action,
+      target: instruction.target,
+      attribute: instruction.attribute,
+      group_field: instruction.group_field
+    };
+}*/
 
-    // Trigger the existing load pipeline
-    await loadSelectedFile();
+
+function askForExtrapolationConfirmation(info) {
+    appendMessage(
+        "DelticAI",
+        //"`I can extrapolate ${info.target} using ${info.attribute} grouped by ${info.group_field}. Run it? (yes/no)`
+        "Please confirm that I can run the data extrapolation now. Would you like me to proceed? (yes/no)"
+    );
+
+    window.pendingExtrapolation = {
+        action: info.action,
+        target: info.target,
+        attribute: info.attribute,
+        group_field: info.group_field
+    };
+}
+
+
+async function getNextScenarioIndex() {
+  return Excel.run(async (context) => {
+    const sheet = context.workbook.worksheets.getActiveWorksheet();
+    //const headerRange = sheet.getRange("1:1");
+    const used = sheet.getUsedRange(true);
+    const headerRange = used.getRow(0);
+    headerRange.load("values");
+    await context.sync();
+
+    const headers = headerRange.values[0];
+    let maxScenario = 0;
+
+    for (const h of headers) {
+      const match = h.match(/_scenario_(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxScenario) maxScenario = num;
+      }
+    }
+
+    return maxScenario + 1;
+  });
+}
+
+
+/*async function insertScenarioColumns() {
+  return Excel.run(async (context) => {
+    const sheet =
+      context.workbook.worksheets.getItem(
+        "JoinedCostData"
+      );
+    await Excel.run(async (context) => {
+        const sheet =
+        context.workbook.worksheets.getItem("JoinedCostData");
+        sheet.protection.unprotect();
+        await context.sync();
+    });
+    const testCell =
+      sheet.getRange("ZZ1");
+    testCell.values = [["TEST"]];
+    await context.sync();
+    console.log("WRITE SUCCESS");
+  });
+}*/
+
+async function insertScenarioColumns(scenarioIndex) {
+  return Excel.run(async (context) => {
+    const sheet = context.workbook.worksheets.getItem("JoinedCostData");
+    sheet.activate();
+    await context.sync();
+        await Excel.run(async (context) => {
+        const sheet =
+        context.workbook.worksheets.getItem("JoinedCostData");
+        sheet.protection.unprotect();
+        await context.sync();
+    });
+
+    //const used = sheet.getUsedRange();
+    const used = sheet.getUsedRange(true);
+    used.load("columnCount");
+    await context.sync();
+
+    const startCol = used.columnCount;
+
+    const headers = [
+      `predicted_value_scenario_${scenarioIndex}`,
+      `prediction_flag_scenario_${scenarioIndex}`,
+      `prediction_method_scenario_${scenarioIndex}`,
+      `prediction_confidence_scenario_${scenarioIndex}`
+    ];
+
+    for (let i = 0; i < 4; i++) {
+      const col = sheet.getRangeByIndexes(0, startCol + i, 1, 1);
+      col.values = [[headers[i]]];
+      col.format.fill.color = "#FFF2CC";
+      col.format.font.bold = true;
+    }
+
+    await context.sync();
+    return startCol;
+  });
+}
+
+
+
+async function runExtrapolationScenario(instruction) {
+  try {
+    console.log("STEP 1");
+
+    const res = await fetch(
+      "http://127.0.0.1:8000/analysis/run",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          file_id: window.currentFileId,
+          instruction
+        })
+      }
+    );
+
+    console.log("STEP 2");
+    const data = await res.json();
+    console.log("STEP 3", data);
+    const aiResult = data.result;
+    console.log("STEP 4");
+    const scenarioIndex =
+      await getNextScenarioIndex();
+
+    console.log(
+      "STEP 5 scenario",
+      scenarioIndex
+    );
+
+    await insertScenarioColumns(
+      scenarioIndex
+    );
+
+    console.log("STEP 6");
+
+    await Excel.run(async (context) => {
+
+      console.log("STEP 7");
+
+      const sheet =
+        context.workbook.worksheets
+          .getItem("JoinedCostData");
+
+      sheet.load("name");
+
+      await context.sync();
+
+      console.log(
+        "STEP 8 sheet found",
+        sheet.name
+      );
+
+      await populateExtrapolationBlock(
+        context,
+        aiResult
+      );
+      console.log("STEP 9");
+    });
+    console.log("STEP 10");
+    appendMessage(
+        "DelticAI",
+        `Extrapolation complete. ${aiResult.length} predictions written to Scenario ${scenarioIndex}.`
+    );
+
+  } catch (e) {
+
+    console.error(
+      "RUN EXTRAPOLATION FAILED"
+    );
+    console.error(e);
+    console.error(e.debugInfo);
+  }
+}
+
+
+/*async function runExtrapolationScenario(instruction) {
+  appendMessage("DelticAI", "Running extrapolation…");
+  const res = await fetch("http://127.0.0.1:8000/analysis/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      file_id: window.currentFileId,
+      instruction: instruction
+    })
+  });
+  const data = await res.json();
+  const aiResult = data.result;
+  const scenarioIndex = await getNextScenarioIndex();
+  await insertScenarioColumns(scenarioIndex);
+  await Excel.run(async (context) => {
+    const sheet = context.workbook.worksheets.getItem("JoinedCostData");
+    sheet.activate();
+    await context.sync();
+    await populateExtrapolationBlock(context, aiResult);
+  });
+  appendMessage("DelticAI", `Scenario ${scenarioIndex} added to Excel.`);
+}*/
+
+
+
+function resetConversationState() {
+    console.log("Resetting conversation state due to dataset change");
+
+    // Reset multi-turn memory
+    chatHistory = [];
+
+    // Reset pending extrapolation
+    pendingExtrapolation = null;
+
+    // Clear chat UI
+    const chat = document.getElementById("chat");
+    if (chat) chat.innerHTML = "";
+
+    // Optional: fresh greeting
+    appendMessage("DelticAI", "New dataset loaded. How would you like to begin?");
+}
+
+
+
+//---------------------
+// REDUNDENT function to write returned data back to the sheet 
+async function activateAndWrite(sheetName, rangeAddress, values) {
+    await Excel.run(async (context) => {
+        const sheet = context.workbook.worksheets.getItem(sheetName);
+
+        sheet.activate();
+        await context.sync();
+
+        const range = sheet.getRange(rangeAddress);
+        range.values = values;
+
+        await context.sync();
+    });
 }
 

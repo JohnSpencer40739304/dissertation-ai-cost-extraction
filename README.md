@@ -8,6 +8,154 @@
 ### Module Leader: Dr Mouad Lemoudden
 Dissertation Project 2026 -  to see if AI can be used to extract and extrapolate dispersed supplier cost data from various different formats and incomplete data sets. Telecom products will be the used example.
 
+# Week 10 (v20260620) - Building the AI Agent for Excel Client
+The plug-in now contains a second tab with an AI chatbot to determine the type of data extrapolation for missing values. Currently only linear regression offered but additional ones can be added to the AI Prompt and pipe.
+
+### 1. High‑Level Architecture Overview - Additions
+Backend:
+- Extraction Layer — deterministic parsing of Excel/PDF/DOCX + OCR + AI fallback
+- Normalisation Layer — ultra‑light semantic cleaning, matrix explosion, and schema routing
+- Persistence Layer — structured storage of raw extraction, normalised rows, and attributes
+- data correction scripts to record user modifications made in excel
+- NEW for week 10 - Open AI Chat router and sequencing using backend data
+- NEW for week 10 - Extrapolation tools for missing cost data (limited to Regression but additions can be added)
+- NEW for week 10 - AI Prompt to Managed the above two
+Front End:
+- Excel Client add-in - installation package needs to built but see below for method
+- Button to select a file to be sent off for extraction and normalisation via the backend
+- drop down list to select previous file already extracted that resides in the back end
+- The above loads data into 3 sheets:
+    - CleanCostData - key costing data - cannot be edited
+    - CleanCostDataAttributes - Extended data table conatining all attributes  - cannot be edited
+    - JoinedCostData - that merges the tables above and repivots the attribute rows into columns
+- A user correction facility, user can make corrections in JoinedCostData and send corrections to the backend
+- A table drop down list that allows user to select and see one table at a time in JoinedCostData when source file has multiple tables
+- NEW for week 10 - An AI chatbox for data extrapolation
+- NEW for week 10 - Tools to insert expolation results
+- NEW for week 10 - Confirmation and various safety features to run it
+Each layer is isolated, testable, and replaceable.
+
+### 2. Folder Structure
+Code
+
+```
+backend/
+  app/
+    main.py                     → FastAPI entrypoint - Week 10 modified to serve excel chat client
+    extract.py                  → Extraction router
+    corrections.py              → Processes data corrections sent from excel client
+    extrapolation_router.py     → NEW Week 10 - Extrapolation Router to find missing values
+    copilot_router.py           → NEW Week 10 - AI Extrapolation Chat Router
+
+    ai/
+      client.py                 → Week 10 redundent - OpenAI client wrapper
+      copilot_ai.py             → Week 10 redundent - Test for AI excel router/prompt
+      copilot_models.py         → Week 10 redundent - Test for AI excel router/prompt
+      copilot_prompt.py         → Week 10 redundent - Test for AI excel router/prompt
+      extrapolation_router.py   → Week 10 redundent - Test for AI excel router/prompt
+      prompt_templates.py       → AI prompt definitions
+
+    services/
+      extraction_service.py        → Deterministic extraction logic
+      normalisation_service.py     → Week‑8 normaliser (active)
+      adapter.py                   → Converts extractor output → normaliser schema
+      corrections_service.py       → Week 9 - Processes data corrections sent from excel client
+      final_schema.py              → Legacy (kept for reference)
+      memory_store.py              → Legacy (Week‑6/7 batch memory)
+      extrapolation_orchestrator.py→ NEW Week 10 - Orchestrates data extrapolation
+
+    tools/
+      ai_table_extraction.py    → AI fallback for table extraction (active)
+      cleaning.py               → Numeric cleaning utilities (active)
+      currency_tool.py          → Currency inference helpers (active)
+      analysis_tools.py         → NEW Week 10 - Data Analytics tools and extrapolation
+      join_tools.py             → NEW Week 10 - Table joining tools for AI Prompt
+
+  modules/
+    db.py                       → DB session + engine
+    models.py                   → SQLAlchemy ORM models
+
+client/
+  excel-addin/
+    deltic-excel-addin/             → Office.js Excel add-in
+      src/taskpane/                 → Main UI logic - NEW week 10 to include AI Chatbot
+      populateExtrapolationBlock.js → NEW week 10 to ADD missing costs extrapolated via AI to the worksheet
+      manifest.xml                  → Add-in manifest
+      node_modules/                 → Ignored by Git
+```
+
+Legacy Week‑6/7 modules are preserved for dissertation evidence but not used in the active pipeline.
+Failed Week 10 modules preserved to show experimentation.
+
+### 3.  Pipeline Overview
+1. Upload
+User selects a file in Excel → sent to backend.
+2. Extract
+Backend parses the document into raw tables.
+3. Normalise
+AI + rule‑based engine converts raw tables into structured cost data.
+4. Load
+Excel add‑in fetches the final clean tables from the backend.
+5. Join
+Attributes are merged into the main table for correction.
+6. Correction
+User edits unlocked fields → corrections sent to backend.
+7. Extrapolation
+AI‑assisted cost prediction based on corrected data.
+
+### 4. Extrapolation Engine 
+The Excel add‑in now includes a chat engine that sends JSON as follows:
+{{
+  "reply": "a friendly, conversational natural-language reply to the user",
+  "fields": ["list", "of", "fields", "to", "use"],
+  "method": "analysis method or null",
+  "notes": "extra notes or empty string",
+  "action": "none | summarize | detect_zero_prices | extrapolate",
+  "target": "unit_price",
+  "attribute": "",
+  "group_field": ""
+}}
+Once Extrapolated, the backend returns the following data:
+{{
+result = extrapolate_missing_values(
+  df=self.df,
+  target=target,
+  attribute=attribute,
+  group_field=group_field,
+  degree=1
+}}
+
+### 5. Database Setup
+Install PostgreSQL 14+ from https://www.postgresql.org/download/
+Create the database:
+createdb cost_dissertation_db
+
+PostgreSQL instance is local and stored here: C:\Program Files\PostgreSQL\<version>\data\
+Host: localhost
+Port: 5432
+Database: cost_dissertation_db
+User: postgres
+
+Run the backend:
+uvicorn main:app --reload
+
+### 6. Backend Setup via Command Prompt
+Create a virtual environment:
+python -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
+
+cd backend
+pip install -r requirements.txt
+uvicorn main:app --reload
+
+Running on local host: http://localhost:8000
+
+### 7. Client Excel setup via Powershell
+cd client/excel-addin/deltic-excel-addin
+npm install
+npm start
+Then sideload the excel manifest into Add-Ins.
+
 
 # Week 9 (v20260608) - Building the Excel Client
 The client is an excel plugin built using a modern javascript and HTML front end calling the backend developed in previous weeks.
@@ -38,6 +186,7 @@ backend/
   app/
     main.py                     → FastAPI entrypoint - Week 9 modified for to serve excel client
     extract.py                  → Extraction router
+    corrections.py              → NEW Week 9 - Processes data corrections sent from excel client
 
     ai/
       client.py                 → OpenAI client wrapper
@@ -47,7 +196,7 @@ backend/
       extraction_service.py     → Deterministic extraction logic
       normalisation_service.py  → Week‑8 normaliser (active)
       adapter.py                → Converts extractor output → normaliser schema
-      corrections.py            → NEW Week 9 - Processes data corrections sent from excel client
+      corrections_service.py    → NEW Week 9 - Processes data corrections sent from excel client
       final_schema.py           → Legacy (kept for reference)
       memory_store.py           → Legacy (Week‑6/7 batch memory)
 
