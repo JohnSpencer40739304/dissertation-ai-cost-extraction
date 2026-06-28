@@ -107,6 +107,30 @@ def init_db():
 
 
 
+# Week 11 - Document Section Analysis
+# ------------------------------------------------------------
+
+class DocumentSection(Base):
+    __tablename__ = "document_sections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(
+        Integer,
+        ForeignKey("uploaded_files.id"),
+        nullable=False,
+        index=True
+    )
+
+    section_number = Column(Integer, nullable=False)
+    title = Column(String, nullable=False)
+    page_start = Column(Integer, nullable=False)
+    page_end = Column(Integer, nullable=False)
+    expected_tables = Column(Integer, default=0)
+    notes = Column(JSON, default=list)
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
 
 
 

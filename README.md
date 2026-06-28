@@ -8,6 +8,73 @@
 ### Module Leader: Dr Mouad Lemoudden
 Dissertation Project 2026 -  to see if AI can be used to extract and extrapolate dispersed supplier cost data from various different formats and incomplete data sets. Telecom products will be the used example.
 
+# Week 11 (v20260630) - Building the AI Agent for Excel Client
+Experiments using AI to try and improve data extraction. Found limits of what AI can capture and extract in one go. Added parts that use AI to analyse file and determine best section paths for AI extraction (some where still too big). This was done on the backend only and is a seperate extraction pipe. It is not connected to the normaliser, later steps nor the client front end.
+
+### 1. Additions
+Backend only:
+- AI document Analysis router & procedure
+- AI document section analysis router & procedure
+- AI document extractor section by section
+For use with PDFs only
+
+### 2. Folder Structure
+Code
+```
+backend/
+  app/
+    main.py                         → FastAPI entrypoint - Week 10 modified to serve excel chat client
+    extract.py                      → Extraction router
+    corrections.py                  → Processes data corrections sent from excel client
+    extrapolation_router.py         → Week 10 - Extrapolation Router to find missing values
+    copilot_router.py               → Week 10 - AI Extrapolation Chat Router
+    analysis_router.py              → NEW Week 11 - AI Doucument Analysis Router
+    document_section_router_iii.py  → NEW Week 11 - AI Doucument Section Router
+    extractor_router_iii.py         → NEW Week 11 - AI Doucument Extraction Router
+
+    ai/
+      client.py                 → Week 10 redundent - OpenAI client wrapper
+      copilot_ai.py             → Week 10 redundent - Test for AI excel router/prompt
+      copilot_models.py         → Week 10 redundent - Test for AI excel router/prompt
+      copilot_prompt.py         → Week 10 redundent - Test for AI excel router/prompt
+      extrapolation_router.py   → Week 10 redundent - Test for AI excel router/prompt
+      prompt_templates.py       → AI prompt definitions
+
+    services/
+      extraction_service.py           → Deterministic extraction logic
+      normalisation_service.py        → Week‑8 normaliser (active)
+      adapter.py                      → Converts extractor output → normaliser schema
+      corrections_service.py          → Week 9 - Processes data corrections sent from excel client
+      final_schema.py                 → Legacy (kept for reference)
+      memory_store.py                 → Legacy (Week‑6/7 batch memory)
+      extrapolation_orchestrator.py   → Week 10 - Orchestrates data extrapolation
+      document_analysis_service.py    → NEW Week 11 - AI Doucument Analysis Service
+      document_section_service_iii.py → NEW Week 11 - AI Doucument Section Service
+      extractor_service_iii.py        → NEW Week 11 - AI Doucument Extraction Service
+
+    tools/
+      ai_table_extraction.py    → AI fallback for table extraction (active)
+      cleaning.py               → Numeric cleaning utilities (active)
+      currency_tool.py          → Currency inference helpers (active)
+      analysis_tools.py         → Week 10 - Data Analytics tools and extrapolation
+      join_tools.py             → Week 10 - Table joining tools for AI Prompt
+
+  modules/
+    db.py                       → DB session + engine
+    models.py                   → SQLAlchemy ORM models
+
+client/
+  excel-addin/
+    deltic-excel-addin/             → Office.js Excel add-in
+      src/taskpane/                 → Main UI logic - NEW week 10 to include AI Chatbot
+      populateExtrapolationBlock.js → Week 10 to ADD missing costs extrapolated via AI to the worksheet
+      manifest.xml                  → Add-in manifest
+      node_modules/                 → Ignored by Git
+```
+### 3. Next Steps
+- Polished input device
+- Enhanced AI extractor with smaller sections and better prompts
+
 # Week 10 (v20260620) - Building the AI Agent for Excel Client
 The plug-in now contains a second tab with an AI chatbot to determine the type of data extrapolation for missing values. Currently only linear regression offered but additional ones can be added to the AI Prompt and pipe.
 

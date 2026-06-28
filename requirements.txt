@@ -46,7 +46,13 @@ psycopg2-binary==2.9.9
 python-dotenv==1.0.1
 
 # --- AI / OpenAI ---
-openai==1.35.10
+#openai==1.35.10
+openai==2.36.0
+annotated-types==0.7.0
+pydantic==2.7.4
+pydantic_core==2.18.4
+
+
 annotated-types==0.7.0
 pydantic==2.7.4
 pydantic_core==2.18.4
@@ -79,6 +85,9 @@ click==8.1.7
 
 # --- PDF / DOCX Extraction (recommended) ---
 pdfplumber==0.11.0
-pypdf==4.2.0
+#pypdf==4.2.0
+pypdf==6.14.2
 python-docx==1.1.0
+
+
 

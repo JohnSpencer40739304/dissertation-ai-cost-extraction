@@ -38,11 +38,11 @@ class NormalisationService:
     def infer_currency(self, attrs: dict) -> str:
         text = " ".join(str(v) for v in attrs.values() if v)
 
-        if "£" in text or "GBP" in text or "UK" in text:
+        if "£" in text or "GBP" in text: # or "UK" in text:
             return "GBP"
-        if "€" in text or "EUR" in text or "EU" in text:
+        if "€" in text or "EUR" in text: # or "EU" in text:
             return "EUR"
-        if "$" in text or "USD" in text or "US" in text:
+        if "$" in text or "USD" in text: # or "US" in text:
             return "USD"
 
         return "USD"

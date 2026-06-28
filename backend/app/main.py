@@ -43,6 +43,18 @@ from backend.modules.db import UploadedFile, ExtractedContent
 from backend.modules.models import CleanCostData, CleanCostDataAttributes
 
 
+# Week 11 - AI document analysis part - used to understand the document being processed
+from .analysis_router import router as analysis_router
+
+from backend.app.extractor_router_iii import (
+    router as extractor_router_iii
+)
+
+from backend.app.document_section_router_iii import (
+    router as document_section_router_iii
+)
+
+
 # Week 1 - main body code
 #class CostItem(BaseModel):
 #    category: str
@@ -52,6 +64,17 @@ from backend.modules.models import CleanCostData, CleanCostDataAttributes
 
 app = FastAPI()
 # init_db() week 10 moved below
+
+# Week 11 - AI document analysis part
+app.include_router(analysis_router)
+
+app.include_router(
+    document_section_router_iii
+)
+
+app.include_router(extractor_router_iii)
+
+
 
 
 # CORS configuration which allows for a smoother API backend in fastAPI
