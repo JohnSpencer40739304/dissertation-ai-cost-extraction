@@ -2,8 +2,6 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from backend.modules.db import get_db, UploadedFile, ExtractedContent
 
-from backend.app.tools.ai_table_extraction import ai_extract_any_table
-
 from backend.app.services.extraction_service import (
     extract_pdf,
     extract_excel,
@@ -11,6 +9,8 @@ from backend.app.services.extraction_service import (
     ocr_image,
     parse_table_from_text
 )
+
+from backend.app.tools.ai_table_extraction import ai_extract_any_table
 
 from datetime import datetime
 import os

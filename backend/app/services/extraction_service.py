@@ -16,7 +16,7 @@ pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tessera
 
 
 
-# EXCEL EXTRACTION — Week 6 + multi-sheet + your two fields
+# EXCEL EXTRACTION — Week 6 + multi-sheet + two fields
 """
 def extract_excel(path: str):
     start = time.time()

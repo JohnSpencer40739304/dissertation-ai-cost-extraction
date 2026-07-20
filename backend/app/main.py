@@ -37,6 +37,8 @@ from backend.app.services.adapter import adapt_unified_extractor_output
 #from backend.app.ai.extrapolation_router import runExtrapolationAI
 from backend.app.copilot_router import router as copilot_router
 from backend.app.extrapolation_router import router as extrapolation_router
+#from backend.app.summary_router import router as summary_router
+
 
 # Database models
 from backend.modules.db import UploadedFile, ExtractedContent
@@ -58,7 +60,7 @@ from backend.app.document_section_router_iii import (
 # Week 1 - main body code
 #class CostItem(BaseModel):
 #    category: str
-#    amount: float
+#    amount: float"
 #    year: int
 
 
@@ -163,6 +165,11 @@ async def upload_file(file: UploadFile = File(...)):
 #from backend.app.extract import router as extract_router
 #app.include_router(extract_router)
 
+
+#from backend.modules.db import init_db
+from backend.modules.db import init_db, SessionLocal
+from backend.app.extract import router as extract_router
+app.include_router(extract_router)
 
 # Week 5 - run normalisation layer
 """
@@ -285,7 +292,7 @@ async def normalise_file(file_id: int):
         "clarifying_questions": output.get("clarifying_questions", [])
     }
 
-
+app.include_router(normalisation_router)
 
 
 
@@ -396,13 +403,14 @@ def list_files():
 
 # ---------------------------------------------------------
 # Register routers 
-app.include_router(extract_router)
-app.include_router(normalisation_router)
+
 from backend.app import corrections
 app.include_router(corrections.router)
+#app.include_router(summary_router, prefix="/summary")
 
 # Week 10 AI routers
 app.include_router(copilot_router, prefix="/copilot")
 app.include_router(extrapolation_router, prefix="/analysis")
+#app.include_router(summary_router, prefix="/summary")
 
 

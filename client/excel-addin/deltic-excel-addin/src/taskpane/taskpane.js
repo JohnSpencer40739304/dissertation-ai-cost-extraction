@@ -1,3 +1,5 @@
+//C:\Users\john_\Documents\dissertation-ai-cost-extraction\client\excel-addin\deltic-excel-addin\src\taskpane\taskpane.js
+
 if (window.__DELTIC_TASKPANE_INITIALIZED__) {
     console.log("Taskpane already initialized — skipping duplicate instance");
 } else {
@@ -105,12 +107,21 @@ async function run() {
 }
 */
 
+
 import { populateExtrapolationBlock }
   from "../excel/populateExtrapolationBlock";
 
 window.pendingExtrapolation = null;
 
-let chatHistory = [];
+//Week 10 AI parts
+//import "../ai/deltic_ai.js";
+import {
+    onSendMessage,
+    appendMessage,
+    resetConversationState
+} from "../ai/deltic_ai.js";
+//let chatHistory = [];
+window.chatHistory = [];
 
 function showTab(tabId) {
     document.querySelectorAll(".tab-panel")
@@ -681,28 +692,6 @@ async function populateFileDropdown() {
   box.scrollTop = box.scrollHeight;
 }*/
 
-function appendMessage(sender, text) {
-  const box = document.getElementById("messages");
-  const div = document.createElement("div");
-
-  // Force text to be a string
-  let safeText = "";
-
-  if (typeof text === "string") {
-    safeText = text;
-  } else if (text && typeof text === "object") {
-    safeText = JSON.stringify(text, null, 2);
-  } else {
-    safeText = String(text);
-  }
-
-  div.textContent = sender + ": " + safeText;
-  div.style.marginBottom = "6px";
-  box.appendChild(div);
-  box.scrollTop = box.scrollHeight;
-}
-
-
 // =================================================
 // REDUNDENT  Excel helpers to select and send back fields
 async function readSelection() {
@@ -774,120 +763,6 @@ async function sendToAnalysis(instruction) {
 
 
 
-// =================================
-// DelticAI chat handler 
-async function onSendMessage() {
-    console.log("NEW ONSENDMESSAGE MULTI-TURN");
-    // Always read the user input FIRST
-    const input = document.getElementById("userInput");
-    const text = input.value.trim();
-    if (!text) return;
-    // ------------------------------------------------------------
-    // 1. Handle YES/NO confirmation for extrapolation
-    if (window.pendingExtrapolation) {
-        const answer = text.toLowerCase();
-
-        /*if (answer === "yes" || answer === "y") {
-            appendMessage("DelticAI", "Running extrapolation…");
-            runExtrapolationScenario(window.pendingExtrapolation);
-            window.pendingExtrapolation = null;
-            return;
-        }*/
-        if (answer === "yes" || answer === "y") {
-
-            appendMessage("You", text);
-            chatHistory.push({
-                role: "user",
-                content: text
-            });
-            input.value = "";
-
-            appendMessage("DelticAI","Running extrapolation...");
-            await runExtrapolationScenario(window.pendingExtrapolation);
-            window.pendingExtrapolation = null;
-            return;
-        }
-
-        /*if (answer === "no" || answer === "n") {
-            appendMessage("DelticAI", "Okay, I won't run it.");
-            window.pendingExtrapolation = null;
-            return;
-        }*/
-        if (answer === "yes" || answer === "y") {
-
-            appendMessage("You", text);
-            chatHistory.push({
-                role: "user",
-                content: text
-            });
-            input.value = "";
-
-            appendMessage("DelticAI","Running extrapolation...");
-            window.pendingExtrapolation = null;
-            return;
-        }
-        appendMessage("DelticAI", "Please answer yes or no.");
-        return;
-    }
-
-    // ------------------------------------------------------------
-    // 2. Normal chat flow
-    // Add user message to UI
-    appendMessage("You", text);
-    // Add to chat history
-    chatHistory.push({ role: "user", content: text });
-    // Clear input
-    input.value = "";
-
-    // Ensure file_id exists
-    if (!window.currentFileId) {
-        appendMessage("System", "No file loaded. Please load a dataset first.");
-        return;
-    }
-    try {
-        const res = await fetch("http://127.0.0.1:8000/copilot", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                history: chatHistory,
-                message: text,
-                file_id: window.currentFileId
-            })
-        });
-
-        const data = await res.json();
-
-        // Extract natural-language reply safely
-        let replyText = data.reply || "(No reply)";
-
-        // If backend accidentally double-encoded JSON
-        try {
-            const parsed = JSON.parse(replyText);
-            replyText = parsed.reply || replyText;
-        } catch (_) {}
-
-        // Show AI assistant reply and add to chat history 
-        appendMessage("DelticAI", replyText);
-        chatHistory.push({ role: "assistant", content: replyText });
-        // Detect extrapolation intent
-        /*if (data.action === "extrapolate") {
-            askForExtrapolationConfirmation(data);
-        }*/
-
-        if (data.action === "extrapolate") {
-            askForExtrapolationConfirmation({
-                action: data.action,
-                target: data.target,
-                attribute: data.attribute,
-                group_field: data.group_field
-            });
-        }
-    } catch (e) {
-        appendMessage("System", "Backend unreachable: " + e.message);
-    }
-}
-
-
 /*function askForExtrapolationConfirmation(instruction) {
     appendMessage(
         "DelticAI",
@@ -904,22 +779,25 @@ async function onSendMessage() {
     };
 }*/
 
-
-function askForExtrapolationConfirmation(info) {
-    appendMessage(
-        "DelticAI",
-        //"`I can extrapolate ${info.target} using ${info.attribute} grouped by ${info.group_field}. Run it? (yes/no)`
-        "Please confirm that I can run the data extrapolation now. Would you like me to proceed? (yes/no)"
-    );
-
-    window.pendingExtrapolation = {
-        action: info.action,
-        target: info.target,
-        attribute: info.attribute,
-        group_field: info.group_field
-    };
-}
-
+/*async function insertScenarioColumns() {
+  return Excel.run(async (context) => {
+    const sheet =
+      context.workbook.worksheets.getItem(
+        "JoinedCostData"
+      );
+    await Excel.run(async (context) => {
+        const sheet =
+        context.workbook.worksheets.getItem("JoinedCostData");
+        sheet.protection.unprotect();
+        await context.sync();
+    });
+    const testCell =
+      sheet.getRange("ZZ1");
+    testCell.values = [["TEST"]];
+    await context.sync();
+    console.log("WRITE SUCCESS");
+  });
+}*/
 
 async function getNextScenarioIndex() {
   return Excel.run(async (context) => {
@@ -946,25 +824,7 @@ async function getNextScenarioIndex() {
 }
 
 
-/*async function insertScenarioColumns() {
-  return Excel.run(async (context) => {
-    const sheet =
-      context.workbook.worksheets.getItem(
-        "JoinedCostData"
-      );
-    await Excel.run(async (context) => {
-        const sheet =
-        context.workbook.worksheets.getItem("JoinedCostData");
-        sheet.protection.unprotect();
-        await context.sync();
-    });
-    const testCell =
-      sheet.getRange("ZZ1");
-    testCell.values = [["TEST"]];
-    await context.sync();
-    console.log("WRITE SUCCESS");
-  });
-}*/
+
 
 async function insertScenarioColumns(scenarioIndex) {
   return Excel.run(async (context) => {
@@ -1004,82 +864,14 @@ async function insertScenarioColumns(scenarioIndex) {
   });
 }
 
-
-
-async function runExtrapolationScenario(instruction) {
-  try {
-    console.log("STEP 1");
-
-    const res = await fetch(
-      "http://127.0.0.1:8000/analysis/run",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          file_id: window.currentFileId,
-          instruction
-        })
-      }
-    );
-
-    console.log("STEP 2");
-    const data = await res.json();
-    console.log("STEP 3", data);
-    const aiResult = data.result;
-    console.log("STEP 4");
-    const scenarioIndex =
-      await getNextScenarioIndex();
-
-    console.log(
-      "STEP 5 scenario",
-      scenarioIndex
-    );
-
-    await insertScenarioColumns(
-      scenarioIndex
-    );
-
-    console.log("STEP 6");
-
-    await Excel.run(async (context) => {
-
-      console.log("STEP 7");
-
-      const sheet =
-        context.workbook.worksheets
-          .getItem("JoinedCostData");
-
-      sheet.load("name");
-
-      await context.sync();
-
-      console.log(
-        "STEP 8 sheet found",
-        sheet.name
-      );
-
-      await populateExtrapolationBlock(
-        context,
-        aiResult
-      );
-      console.log("STEP 9");
-    });
-    console.log("STEP 10");
-    appendMessage(
-        "DelticAI",
-        `Extrapolation complete. ${aiResult.length} predictions written to Scenario ${scenarioIndex}.`
-    );
-
-  } catch (e) {
-
-    console.error(
-      "RUN EXTRAPOLATION FAILED"
-    );
-    console.error(e);
-    console.error(e.debugInfo);
-  }
-}
-
+// ---------------------------------------------------------
+// Expose Excel helper functions to DelticAI (Version I)
+// These allow deltic_ai.js to invoke Excel-specific logic
+// without duplicating it.
+// ---------------------------------------------------------
+window.getNextScenarioIndex = getNextScenarioIndex;
+window.insertScenarioColumns = insertScenarioColumns;
+window.populateExtrapolationBlock = populateExtrapolationBlock;
 
 /*async function runExtrapolationScenario(instruction) {
   appendMessage("DelticAI", "Running extrapolation…");
@@ -1104,24 +896,6 @@ async function runExtrapolationScenario(instruction) {
   appendMessage("DelticAI", `Scenario ${scenarioIndex} added to Excel.`);
 }*/
 
-
-
-function resetConversationState() {
-    console.log("Resetting conversation state due to dataset change");
-
-    // Reset multi-turn memory
-    chatHistory = [];
-
-    // Reset pending extrapolation
-    pendingExtrapolation = null;
-
-    // Clear chat UI
-    const chat = document.getElementById("chat");
-    if (chat) chat.innerHTML = "";
-
-    // Optional: fresh greeting
-    appendMessage("DelticAI", "New dataset loaded. How would you like to begin?");
-}
 
 
 

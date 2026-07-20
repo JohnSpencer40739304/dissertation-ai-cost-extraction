@@ -101,7 +101,6 @@ class CleanCostData(Base):
     ai_confidence_overall = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-
     attributes = relationship(
         "CleanCostDataAttributes",
         back_populates="parent",
@@ -117,12 +116,9 @@ class CleanCostDataAttributes(Base):
     attribute_name = Column(String, nullable=False)
     #attribute_value = Column(String, nullable=True)
     attribute_value = Column(JSONB, nullable=True)
-
     extraction_method = Column(String, nullable=True)  # deterministic / ai / ocr
     confidence_score = Column(Float, nullable=True)
-
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-
     parent = relationship("CleanCostData", back_populates="attributes")
 
 
@@ -192,7 +188,6 @@ class CleanCostData(Base):
 
 class CleanCostDataCorrectionsCore(Base):
     __tablename__ = "clean_cost_data_corrections_core"
-
     id = Column(Integer, primary_key=True, index=True)
     source_row_id = Column(Integer, ForeignKey("clean_cost_data.id"), nullable=False, index=True)
     file_id = Column(Integer, nullable=False, index=True)
@@ -201,13 +196,10 @@ class CleanCostDataCorrectionsCore(Base):
     new_value = Column(JSONB, nullable=True)
     user_id = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-
     parent = relationship("CleanCostData")
-
 
 class CleanCostDataCorrectionsAttributes(Base):
     __tablename__ = "clean_cost_data_corrections_attributes"
-
     id = Column(Integer, primary_key=True, index=True)
     source_row_id = Column(Integer, ForeignKey("clean_cost_data.id"), nullable=False, index=True)
     file_id = Column(Integer, nullable=False, index=True)
@@ -216,6 +208,5 @@ class CleanCostDataCorrectionsAttributes(Base):
     new_value = Column(JSONB, nullable=True)
     user_id = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-
     parent = relationship("CleanCostData")
 

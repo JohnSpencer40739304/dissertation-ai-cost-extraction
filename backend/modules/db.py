@@ -44,7 +44,6 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
-
 # Fast API section 
 def get_db():
     db: Session = SessionLocal()
@@ -67,7 +66,6 @@ def get_connection():
 
 class UploadedFile(Base):
     __tablename__ = "uploaded_files"
-
     id = Column(Integer, primary_key=True, index=True)
     #file_name = Column(String, nullable=False) # minor week 3 correction in order to match field name in DB
     filename = Column(String, nullable=False) 
@@ -78,7 +76,6 @@ class UploadedFile(Base):
 # WEEK 3 MODEL  Extracted Content
 class ExtractedContent(Base):
     __tablename__ = "extracted_content"
-
     id = Column(Integer, primary_key=True, index=True)
     file_id = Column(Integer, ForeignKey("uploaded_files.id"))
     raw_text = Column(Text, nullable=True)
@@ -112,7 +109,6 @@ def init_db():
 
 class DocumentSection(Base):
     __tablename__ = "document_sections"
-
     id = Column(Integer, primary_key=True, index=True)
     file_id = Column(
         Integer,

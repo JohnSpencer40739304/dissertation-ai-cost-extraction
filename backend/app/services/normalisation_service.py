@@ -109,6 +109,8 @@ class NormalisationService:
                 cleaned_rows = self.explode_matrix_table(header, cleaned_rows)
             elif table_type == "garbage_table":
                 continue
+            elif table_type == "lookup_table":
+                continue
 
             # 4. Build final_rows AFTER classification/explosion
             final_rows = []
@@ -337,12 +339,38 @@ class NormalisationService:
         You are a table classification engine.
 
         Given the following table headers and sample rows,
-        classify the table into one of these types:
+        classify the table into exactly one of these types:
 
         - simple_cost_table
-        - lookup_table
         - matrix_table
+        - lookup_table
         - garbage_table
+
+        Definitions:
+
+        simple_cost_table
+        - Each row represents one costing item.
+        - The row may contain one or more price fields.
+        - The table can be normalised without splitting rows or columns.
+
+        matrix_table
+        - A single row or column represents multiple costing items.
+        - The table must be split into separate records before normalisation.
+
+        lookup_table
+        - Contains reference information only.
+        - No pricing or costing data.
+        - Examples include country codes, airport codes, product code mappings, units or translations.
+
+        garbage_table
+        - Empty, decorative or irrelevant tables that contain no useful business information.
+
+        Return ONLY one of:
+
+        simple_cost_table
+        matrix_table
+        lookup_table
+        garbage_table
 
         HEADERS:
         {headers}
@@ -350,13 +378,6 @@ class NormalisationService:
         SAMPLE ROWS:
         {sample_rows[:5]}
 
-        Rules:
-        - If the table has 1 descriptive column and many numeric columns → matrix_table
-        - If the table has 2 columns and the second looks like a price → lookup_table
-        - If the table has columns like description/price/quantity → simple_cost_table
-        - If the table is empty or meaningless → garbage_table
-
-        Respond with ONLY the type name.
         """
 
         response = ai_client.chat.completions.create(
