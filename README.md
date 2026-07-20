@@ -23,14 +23,14 @@ Code
 ```
 backend/
   app/
-    main.py                         → FastAPI entrypoint - Week 12 modified to serve excel chat client addtional features
+    main.py                         → FastAPI entrypoint - NEW Week 12 modified to serve excel chat client addtional features
     extract.py                      → Extraction router
     corrections.py                  → Processes data corrections sent from excel client
     extrapolation_router.py         → Week 10 - Extrapolation Router to find missing values
     copilot_router.py               → Week 10 - AI Extrapolation Chat Router
-    analysis_router.py              → NEW Week 11 - AI Doucument Analysis Router
-    document_section_router_iii.py  → NEW Week 11 - AI Doucument Section Router
-    extractor_router_iii.py         → NEW Week 11 - AI Doucument Extraction Router
+    analysis_router.py              → Week 11 - AI Doucument Analysis Router
+    document_section_router_iii.py  → Week 11 - AI Doucument Section Router
+    extractor_router_iii.py         → Week 11 - AI Doucument Extraction Router
 
     ai/
       client.py                 → Week 10 redundent - OpenAI client wrapper
@@ -48,9 +48,9 @@ backend/
       final_schema.py                 → Legacy (kept for reference)
       memory_store.py                 → Legacy (Week‑6/7 batch memory)
       extrapolation_orchestrator.py   → Week 10 - Orchestrates data extrapolation
-      document_analysis_service.py    → NEW Week 11 - AI Doucument Analysis Service
-      document_section_service_iii.py → NEW Week 11 - AI Doucument Section Service
-      extractor_service_iii.py        → NEW Week 11 - AI Doucument Extraction Service
+      document_analysis_service.py    → Week 11 - AI Doucument Analysis Service
+      document_section_service_iii.py → Week 11 - AI Doucument Section Service
+      extractor_service_iii.py        → Week 11 - AI Doucument Extraction Service
 
     tools/
       ai_table_extraction.py    → AI fallback for table extraction (active)
@@ -74,7 +74,7 @@ client/
       src/excel/
         populateExtrapolationBlock.je → Inserts extrapolation results into excel sheet
       src/ai/
-        deltic_ai.js                  → Week 12 refectoring seperating AI elements from taskpane.js to here
+        deltic_ai.js                  → NEW Week 12 refectoring seperating AI elements from taskpane.js to here
       populateExtrapolationBlock.js   → Week 10 to ADD missing costs extrapolated via AI to the worksheet
       manifest.xml                    → Add-in manifest
       node_modules/                   → Ignored by Git
