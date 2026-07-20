@@ -78,6 +78,7 @@ client/
       populateExtrapolationBlock.js   → Week 10 to ADD missing costs extrapolated via AI to the worksheet
       manifest.xml                    → Add-in manifest
       node_modules/                   → Ignored by Git
+```
 
 ### 3. Next Steps
 - Polished input device
