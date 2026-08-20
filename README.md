@@ -24,6 +24,18 @@ Before installing Deltic AI, ensure the following software is installed:
   NPM is included with the standard Node.js installation.
 * **Microsoft Excel (Desktop)** — [Microsoft Excel](https://www.microsoft.com/microsoft-365/excel)
 
+###PostgreSQL configuration
+Deltic AI requires a local PostgreSQL installation.
+
+The prototype currently expects the PostgreSQL server to be available at:
+localhost
+
+with the following database credentials:
+User: postgres
+Password: postgres
+Database: cost_dissertation_db
+
+The cost_dissertation_db database must be created before first launching Deltic AI. Once the database exists, Deltic AI automatically creates the required application tables using SQLAlchemy.
 
 ### OpenAI API Configuration
 Deltic AI uses the OpenAI API for AI-assisted functionality. A ChatGPT subscription is not required; however, an OpenAI API key with available API usage is required.
