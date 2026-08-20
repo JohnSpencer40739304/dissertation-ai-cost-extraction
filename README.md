@@ -24,7 +24,7 @@ Before installing Deltic AI, ensure the following software is installed:
   NPM is included with the standard Node.js installation.
 * **Microsoft Excel (Desktop)** — [Microsoft Excel](https://www.microsoft.com/microsoft-365/excel)
 
-###PostgreSQL configuration
+### PostgreSQL configuration
 Deltic AI requires a local PostgreSQL installation.
 
 The prototype currently expects the PostgreSQL server to be available at:
