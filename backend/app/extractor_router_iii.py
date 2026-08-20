@@ -10,7 +10,7 @@ from backend.app.services.extractor_service_iii import (
 )
 logger = logging.getLogger(__name__)
 
-# -----------------------------------------------------------
+# -------------------------------  -----------------
 # Router
 router = APIRouter(
     prefix="/extractor3",

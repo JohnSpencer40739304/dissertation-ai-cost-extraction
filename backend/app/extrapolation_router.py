@@ -16,7 +16,8 @@ class ExtrapolationRequest(BaseModel):
 @router.post("/run")
 def run_extrapolation(req: ExtrapolationRequest):
     orch = ExtrapolationOrchestrator(req.file_id)
-    # Switch from OLD above to NEW below
+    # Switch from OLD above to NEW below - initial idea to develope a
+    #  second module but not needed as adding additional features did not break anything
     #orch = ExtrapolationOrchestratorII(req.file_id)
     return orch.run(req.instruction)
 

@@ -111,7 +111,9 @@ async function run() {
 import { populateExtrapolationBlock }
   from "../excel/populateExtrapolationBlock";
 
-window.pendingExtrapolation = null;
+//window.pendingExtrapolation = null;
+window.pendingCurveAction = null;
+
 
 //Week 10 AI parts
 //import "../ai/deltic_ai.js";

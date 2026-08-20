@@ -33,7 +33,7 @@ class DocumentSection(BaseModel):
     page_end: int
 
 
-# -------------------------------------------------
+# -------------------------------
 # Document Analysis
 
 class DocumentAnalysis(BaseModel):
@@ -62,7 +62,7 @@ class DocumentAnalysis(BaseModel):
     )
 
 
-# ------------------------------------------
+# -----------------------------
 # Result
 class DocumentAnalysisResult(BaseModel):
     success: bool
@@ -71,7 +71,7 @@ class DocumentAnalysisResult(BaseModel):
     error: Optional[str] = None
 
 
-# ------------------------------------------
+# ----------------------------------------
 # Service
 class DocumentAnalysisService:
 

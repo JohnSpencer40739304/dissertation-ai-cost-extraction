@@ -9,6 +9,86 @@
 Dissertation Project 2026 -  to see if AI can be used to extract and extrapolate dispersed supplier cost data from various different formats and incomplete data sets. Telecom products will be the used example.
 
 
+## Final Prototype Installation
+
+**Deltic AI v1.0.0 — Dissertation MVP**
+
+The final prototype is distributed as a Windows installer. The installer deploys the Deltic AI backend, Excel add-in, supporting files and application launcher.
+
+### VERY IMPORTANT -- Prerequisites
+Before installing Deltic AI, ensure the following software is installed:
+
+* **Python 3.12** — [Download Python](https://www.python.org/downloads/)
+* **PostgreSQL** — [Download PostgreSQL](https://www.postgresql.org/download/windows/)
+* **Node.js / NPM** — [Download Node.js](https://nodejs.org/en/download)
+  NPM is included with the standard Node.js installation.
+* **Microsoft Excel (Desktop)** — [Microsoft Excel](https://www.microsoft.com/microsoft-365/excel)
+
+
+### OpenAI API Configuration
+Deltic AI uses the OpenAI API for AI-assisted functionality. A ChatGPT subscription is not required; however, an OpenAI API key with available API usage is required.
+* **OpenAI API Key** — [OpenAI API Keys](https://platform.openai.com/api-keys)
+
+Create a Windows environment variable named:
+`OPENAI_API_KEY`
+
+and set its value to your OpenAI API key.
+**Do not store the API key in the source code or commit it to GitHub.**
+
+### Deltic AI Installation
+
+Once the prerequisites have been installed and the OpenAI API key configured:
+1. Download `DelticAI_Setup.exe` from the latest GitHub Release.
+2. Run the installer.
+3. Complete the installation using the default options.
+4. Launch **Deltic AI** from the desktop shortcut.
+5. Microsoft Excel will open automatically with the Deltic AI add-in.
+> **Note:** Deltic AI was developed and tested on Windows with the desktop version of Microsoft Excel. The prototype is provided as an academic MVP and is not intended as a production deployment package.
+
+The installer creates the required application directories and an empty `uploads` directory for documents processed by the application.
+
+### Starting Deltic AI
+The desktop shortcut starts the complete application environment.
+The launcher automatically starts:
+1. The FastAPI backend.
+2. The local Excel add-in development server.
+3. Microsoft Excel with the Deltic AI add-in.
+
+The user does not need to manually start Command Prompt, PowerShell, Uvicorn or NPM.
+
+### Application Architecture
+At runtime, the application operates as follows:
+
+```text
+Deltic AI Desktop Shortcut
+          |
+          v
+   start_deltic.bat
+       /       \
+      v         v
+ FastAPI      Excel Add-in
+ :8000          :3000
+      \         /
+       \       /
+        v     v
+       Deltic AI
+          |
+     +----+----+
+     |         |
+     v         v
+PostgreSQL   OpenAI API
+```
+
+### Final Release
+The source code and installation configuration are maintained in the GitHub repository.
+The compiled Windows installer is distributed through the GitHub Release rather than stored in the normal Git repository history.
+**Release:** `v1.0.0 — Dissertation MVP`
+**Installer:** `DelticAI_Setup.exe`
+### Important Security Note
+Never commit an OpenAI API key to the GitHub repository or include it directly in the installer.
+The API key should be supplied through the `OPENAI_API_KEY` Windows environment variable.
+
+
 # Week 12 (v20260720) - Adding additional features for Client AI
 Previously the client end AI could run just one extrapolation method on the backend and perform some data summary work. Week 12 adds additional features to that. These include:
  - a more in depth summary whereby the user can ask for a summary breakdown by an attribute grouping field (such as country, or speed - any value which repeats and can be grouped)
@@ -23,14 +103,14 @@ Code
 ```
 backend/
   app/
-    main.py                         → FastAPI entrypoint - NEW Week 12 modified to serve excel chat client addtional features
+    main.py                         → FastAPI entry point - NEW Week 12 modified to serve excel chat client additional features
     extract.py                      → Extraction router
     corrections.py                  → Processes data corrections sent from excel client
     extrapolation_router.py         → Week 10 - Extrapolation Router to find missing values
     copilot_router.py               → Week 10 - AI Extrapolation Chat Router
-    analysis_router.py              → Week 11 - AI Doucument Analysis Router
-    document_section_router_iii.py  → Week 11 - AI Doucument Section Router
-    extractor_router_iii.py         → Week 11 - AI Doucument Extraction Router
+    analysis_router.py              → Week 11 - AI Document Analysis Router
+    document_section_router_iii.py  → Week 11 - AI Document Section Router
+    extractor_router_iii.py         → Week 11 - AI Document Extraction Router
 
     ai/
       client.py                 → Week 10 redundent - OpenAI client wrapper
@@ -48,9 +128,9 @@ backend/
       final_schema.py                 → Legacy (kept for reference)
       memory_store.py                 → Legacy (Week‑6/7 batch memory)
       extrapolation_orchestrator.py   → Week 10 - Orchestrates data extrapolation
-      document_analysis_service.py    → Week 11 - AI Doucument Analysis Service
-      document_section_service_iii.py → Week 11 - AI Doucument Section Service
-      extractor_service_iii.py        → Week 11 - AI Doucument Extraction Service
+      document_analysis_service.py    → Week 11 - AI Document Analysis Service
+      document_section_service_iii.py → Week 11 - AI Document Section Service
+      extractor_service_iii.py        → Week 11 - AI Document Extraction Service
 
     tools/
       ai_table_extraction.py    → AI fallback for table extraction (active)
@@ -70,11 +150,11 @@ client/
       src/taskpane/                   → Main UI logic - NEW week 10 to include AI Chatbot
         taskpane.js                   → Client Orchestrator
         taskpane.html                 → User interface
-        taskpane.css                  → Appearence
+        taskpane.css                  → Appearance
       src/excel/
         populateExtrapolationBlock.je → Inserts extrapolation results into excel sheet
       src/ai/
-        deltic_ai.js                  → NEW Week 12 refectoring seperating AI elements from taskpane.js to here
+        deltic_ai.js                  → NEW Week 12 refactoring separating AI elements from taskpane.js to here
       populateExtrapolationBlock.js   → Week 10 to ADD missing costs extrapolated via AI to the worksheet
       manifest.xml                    → Add-in manifest
       node_modules/                   → Ignored by Git

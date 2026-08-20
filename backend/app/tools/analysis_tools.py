@@ -6,6 +6,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import Pipeline
 
+# Probably redendant as DF frame is sent the orchestrator. 
 from backend.modules.db import get_db
 from backend.modules.models import CleanCostData, CleanCostDataAttributes
 
@@ -21,8 +22,9 @@ def log_function(x, a, b, c, d):
 # --- end of week 12 here but see below
 
 
-# ---------------------------------------------------------
+# ------------------------------------------------ --
 # Load dataset from PostgreSQL (raw tables)
+# Probably redendant as DF frame is sent the orchestrator to be used below. 
 def load_clean_tables(file_id: int):
     db: Session = next(get_db())
     rows_main = (
@@ -41,7 +43,7 @@ def load_clean_tables(file_id: int):
     return df_main, df_attr
 
 
-# ---------------------------------------------------------
+# -------------------------------------- ---------------
 # Basic diagnostics
 def summarize_dataset(df: pd.DataFrame) -> str:
     if df.empty:
@@ -68,7 +70,7 @@ def detect_zero_price_patterns(df: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------
+# -------------------------------------------------------
 # Regression helpers
 def build_regression_model(degree: int = 1) -> Pipeline:
     return Pipeline([
@@ -77,7 +79,7 @@ def build_regression_model(degree: int = 1) -> Pipeline:
     ])
 
 
-# ---------------------------------------------------------
+# -------------------------------------------
 # Extrapolation engine (agnostic)
 def extrapolate_missing_values(
     df: pd.DataFrame,
@@ -167,8 +169,6 @@ def calculus_curve(df, attribute, group_field):
 
     # Drop rows where either attribute or price is not numeric
     df = df[df["_attr"].notnull() & df["_price"].notnull()]
-    # -------------------------------------------------------
-
     # --- SAFE LOG FUNCTION (no invalid domain) ---
     def safe_log_function(x, a, b, c, d):
         # Ensure x is non-negative
@@ -179,7 +179,6 @@ def calculus_curve(df, attribute, group_field):
         bx1 = np.maximum(bx1, 1e-9)
 
         return (a * np.log(bx1) + c) + d
-    # -------------------------------------------------------
 
     # Group by the chosen field (e.g., Country)
     for group_value, group in df.groupby(group_field):
@@ -190,7 +189,6 @@ def calculus_curve(df, attribute, group_field):
         # Need enough points to fit a curve
         if len(train) < 5:
             continue
-
         speeds_train = train["_attr"].values
         prices_train = train["_price"].values
 
@@ -223,13 +221,11 @@ def calculus_curve(df, attribute, group_field):
             speed = row["_attr"]
             curve_val = float(safe_log_function(speed, *popt))
 
-            # --- LEAVE BLANK IF CALCULUS PRODUCES NONSENSE ---
+            # --- leave blank if nonsense (negative values not possible)
             if not np.isfinite(curve_val):
                 continue
             if curve_val <= 0:
                 continue
-            # -------------------------------------------------
-
             results.append({
                 "cost_item_id": int(row["id"]),   # REAL Excel row ID
                 "predicted_value": curve_val,
@@ -259,39 +255,29 @@ def spline_curve(df, attribute, group_field):
 
     # Drop rows where either attribute or price is not numeric
     df = df[df["_attr"].notnull() & df["_price"].notnull()]
-    # -------------------------------------------------------
 
     # Group by the chosen field (e.g., Country)
     for group_value, group in df.groupby(group_field):
-
         # Training data = rows with real prices
         train = group[group["_price"] > 0]
-
         # Need enough points to fit a spline
         if len(train) < 5:
             continue
-
         speeds_train = train["_attr"].values
         prices_train = train["_price"].values
-
         # Fit monotonic PCHIP spline
         try:
             pchip = PchipInterpolator(speeds_train, prices_train)
         except Exception:
             continue
-
         # Predict only for missing (zero-price) rows
         missing = group[group["_price"] == 0]
-
         for _, row in missing.iterrows():
             speed = row["_attr"]
             curve_val = float(pchip(speed))
-
-            # --- LEAVE BLANK IF SPLINE PRODUCES NONSENSE ---
+            # --- if nonsense leave blank
             if curve_val <= 0:
                 continue
-            # ------------------------------------------------
-
             results.append({
                 "cost_item_id": int(row["id"]),   # REAL Excel row ID
                 "predicted_value": curve_val,
@@ -322,7 +308,6 @@ def monotonic_gb_curve(df, attribute, group_field):
     df["_attr"] = pd.to_numeric(df[attribute], errors="coerce")
     df["_price"] = pd.to_numeric(df["unit_price"], errors="coerce")
     df = df[df["_attr"].notnull() & df["_price"].notnull()]
-    # -------------------------------------------------------
 
     # Group by the chosen field (e.g., Country)
     for group_value, group in df.groupby(group_field):
@@ -352,7 +337,6 @@ def monotonic_gb_curve(df, attribute, group_field):
             model.fit(X_train, y_train)
         except Exception:
             continue
-        # -------------------------------------------------------
 
         # Predict only for missing (zero-price) rows
         missing = group[group["_price"] == 0]

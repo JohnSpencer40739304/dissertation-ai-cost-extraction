@@ -60,7 +60,7 @@ class ExtrapolationOrchestrator:
             "message": "No analytical action requested."
         }
 
-    # ---------------------------------------------------------
+    # --------------------------------
     # Tools
     def _run_summary(self) -> Dict[str, Any]:
         summary = summarize_dataset(self.df)

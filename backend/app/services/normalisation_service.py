@@ -33,7 +33,7 @@ class NormalisationService:
         self.file_id = raw_extraction.get("file_id")
         self.db = SessionLocal()
 
-    # ---------------------------------------------------------
+    # ------------------------------------------------------
     # Simple Currency inference (could be made better)
     def infer_currency(self, attrs: dict) -> str:
         text = " ".join(str(v) for v in attrs.values() if v)
@@ -47,7 +47,7 @@ class NormalisationService:
 
         return "USD"
 
-    # ---------------------------------------------------------
+
     # Main Pipeline
     def run(self):
         print("\n\n================ RAW EXTRACTION ================\n")
@@ -64,7 +64,6 @@ class NormalisationService:
 
         merged_tables = []
 
-        # --------------------------------------------------
         # For handling multiple tables
         for table_index, table in enumerate(tables):
             header = table.get("header") or table.get("headers") or []
@@ -144,7 +143,7 @@ class NormalisationService:
         return merged_output
 
 
-    # ----------------------------------------------------
+    # ----------------------------------------
     # Week 8  save method
     def save_to_normalised_content(self, file_id: int, ai_output: dict):
         db: Session = next(get_db())
@@ -165,9 +164,7 @@ class NormalisationService:
 
         db.commit()
 
-    # ---------------------------------------------------------
     # route to the universal schema
-
     def route_core_and_attributes(self, merged_output):
         core_rows = []
         attribute_rows = []
@@ -180,8 +177,6 @@ class NormalisationService:
             for idx, row in enumerate(rows):
 
                 attrs = row.get("attributes") or row
-
-                # -----------------------------------------
                 #   Matrix logic (Dimension + Value) as country is a common value
 
                 if "Dimension" in attrs and "Value" in attrs:
@@ -190,7 +185,6 @@ class NormalisationService:
                     unit_price = float(v) if is_numeric(v) else None
                     quantity = 1
 
-                # -----------------------------------------
                 # Generic  (non-matrix rows)
                 else:
                     # 1. Item description

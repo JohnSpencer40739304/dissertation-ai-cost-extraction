@@ -63,7 +63,7 @@ def load_clean_tables_for_excel(file_id: int):
         "excel_attr": excel_attr,
     }
 
-# ============================================================
+# ==================================
 # Joined table (mimics joined table in excel and used by AI and extrapolation service
 
 def build_joined_table(df_main: pd.DataFrame, df_attr: pd.DataFrame) -> pd.DataFrame:

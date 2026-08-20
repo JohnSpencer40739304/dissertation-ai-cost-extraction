@@ -46,7 +46,7 @@ class DocumentSectionResult(BaseModel):
     error: Optional[str] = None
 
 
-# -----------------------------------------------------
+# ----------------------------------------
 # Service
 class DocumentSectionServiceIII:
     def __init__(self):
@@ -76,7 +76,7 @@ Each extraction section should:
 Return ONLY valid JSON.
 """
 
-    # --------------------------------------------------------
+    # -------------------------
     # Public Entry Point
     def analyse_sections(
         self,
@@ -95,7 +95,6 @@ Return ONLY valid JSON.
                 "Analysing extraction sections..."
             )
 
-            # ------------------------------------------------
             # Upload document
             with open(path, "rb") as f:
                 uploaded_file = client.files.create(
@@ -108,7 +107,6 @@ Return ONLY valid JSON.
                 uploaded_file.id
             )
 
-            # ------------------------------------------------
             # Ask OpenAI
             response = client.responses.create(
                 model="gpt-4.1",
@@ -164,7 +162,6 @@ Return JSON only.
                 ]
             )
 
-            # ------------------------------------------------
             # Parse JSON
             section_json = json.loads(
                 response.output_text
@@ -207,7 +204,6 @@ Return JSON only.
                 error=str(ex)
             )
     # Save Section Analysis
-    # --------------------------------------------------------
 
     def _save_sections(
         self,

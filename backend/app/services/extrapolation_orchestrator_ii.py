@@ -47,10 +47,7 @@ from backend.app.tools.analysis_tools_ii import (
 
 class ExtrapolationOrchestratorII:
 
-    # ---------------------------------------------------------
     # Constructor
-    # ---------------------------------------------------------
-
     def __init__(self, file_id: int):
 
         df_main, df_attr = load_clean_tables_for_copilot(file_id)
@@ -62,10 +59,8 @@ class ExtrapolationOrchestratorII:
 
         self.file_id = file_id
 
-    # ---------------------------------------------------------
-    # Main entry point
-    # ---------------------------------------------------------
 
+    # Main entry point
     def run(
         self,
         instruction: Dict[str, Any]
@@ -94,10 +89,7 @@ class ExtrapolationOrchestratorII:
 
         }
 
-    # ---------------------------------------------------------
     # Dataset summary
-    # ---------------------------------------------------------
-
     def _run_summary(self):
 
         summary = summarize_dataset(self.df)
@@ -112,10 +104,8 @@ class ExtrapolationOrchestratorII:
 
         }
 
-    # ---------------------------------------------------------
-    # Zero-price analysis
-    # ---------------------------------------------------------
 
+    # Zero-price analysis
     def _run_zero_price_detection(self):
 
         patterns = detect_zero_price_patterns(self.df)
@@ -130,10 +120,7 @@ class ExtrapolationOrchestratorII:
 
         }
 
-    # ---------------------------------------------------------
     # Extrapolation
-    # ---------------------------------------------------------
-
     def _run_extrapolation(
         self,
         instruction: Dict[str, Any]

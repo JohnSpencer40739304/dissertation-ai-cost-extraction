@@ -122,9 +122,8 @@ export async function onSendMessage() {
 
 
 
-    // ------------------------------------------------------------
+    // -------------------------------------- -----------------
     // 2. Normal chat flow
-    // Add user message to UI
     appendMessage("You", text);
     // Add to chat history
     //chatHistory.push({ role: "user", content: text });
@@ -515,6 +514,52 @@ async function runSplineCurveScenario(attribute, group_field) {
 }
 
 
+async function runCalculusCurveScenario(attribute, group_field) {
+    try {
+        const res = await fetch(
+            "http://127.0.0.1:8000/analysis/run",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    file_id: window.currentFileId,
+                    instruction: {
+                        action: "calculus_curve",
+                        attribute,
+                        group_field
+                    }
+                })
+            }
+        );
+
+        const data = await res.json();
+
+        if (data.status === "error") {
+            appendMessage("DelticAI", `Calculus curve failed: ${data.message}`);
+            return;
+        }
+
+        const aiResult = data.result;
+
+        const scenarioIndex = await window.getNextScenarioIndex();
+        await window.insertScenarioColumns(scenarioIndex);
+
+        await Excel.run(async (context) => {
+            const sheet = context.workbook.worksheets.getItem("JoinedCostData");
+            await window.populateExtrapolationBlock(context, aiResult);
+        });
+
+        appendMessage(
+            "DelticAI",
+            `Calculus curve complete. ${aiResult.length} predictions written to Scenario ${scenarioIndex}.`
+        );
+
+    } catch (e) {
+        console.error("RUN SPLINE FAILED");
+        console.error(e);
+        console.error(e.debugInfo);
+    }
+}
 
 
 async function runMonotonicGBCurveScenario(attribute, group_field) {

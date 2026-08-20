@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 client = OpenAI()
 
 TESTSEC = 1  #Scientific Testing of each section
-# ------------------------------------------------------------
+# ---------------------------------------------
 # Result Models
 class ExtractionResult:
 
@@ -73,7 +73,6 @@ class ExtractorServiceIII:
             logger.info("Starting Extractor Service III")
             logger.info("=" * 60)
 
-            # ---------------------------------------------
             # STEP 1 - Load uploaded document
             logger.info("STEP 1 - Loading uploaded document...")
 
@@ -119,7 +118,7 @@ class ExtractorServiceIII:
             )
             logger.info("Document: %s", uploaded.filename)
 
-            # ----------------------------------------------
+
             # STEP 2 - Document analysis
             logger.info("STEP 2 - Running Document Analysis...")
             analysis_service = DocumentAnalysisService()
@@ -135,13 +134,12 @@ class ExtractorServiceIII:
             analysis = analysis_result.analysis
             self._log_document_analysis(analysis)
 
-            # -------------------------------------------------
+
             # STEP 3 - Build prompt
             logger.info("STEP 3 - Building extraction prompt...")
             prompt = self._build_prompt(analysis)
             logger.info(prompt)
 
-            # --------------------------------------------------
             # STEP 4 - Extract tables
             section = sections[TESTSEC]
 
@@ -175,7 +173,7 @@ class ExtractorServiceIII:
                 error=str(ex)
             )
 
-    # ----------------------------------------------------
+    # --------------------------------------------------
     # Private Methods
     def _log_document_analysis(
         self,
@@ -446,7 +444,6 @@ Return valid JSON only.
 
             writer.add_page(reader.pages[page])
 
-        # --------------------------------------------------------
         # Create debug folder
         output_dir = Path("debug_sections")
         output_dir.mkdir(exist_ok=True)
